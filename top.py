@@ -121,8 +121,8 @@ class Top:
                 nx = self.steer_x / mag
                 ny = self.steer_y / mag
                 resistance = 1.0 + (1.0 - spin_ratio) * 0.5
-                self.vx += (nx * steer_power - self.vx * 0.5) * dt / resistance
-                self.vy += (ny * steer_power - self.vy * 0.5) * dt / resistance
+                self.vx += (nx * steer_power) * dt / resistance
+                self.vy += (ny * steer_power) * dt / resistance
 
         friction = 0.4 * effective_grip
         speed = math.sqrt(self.vx ** 2 + self.vy ** 2)
@@ -138,6 +138,7 @@ class Top:
             max_speed *= 1.25
         if self.is_dashing:
             max_speed *= 2.0
+
         cur_speed = math.sqrt(self.vx ** 2 + self.vy ** 2)
         if cur_speed > max_speed:
             scale = max_speed / cur_speed
@@ -235,8 +236,14 @@ class Top:
         dy = self.y - ARENA_CENTER[1]
         dist = math.sqrt(dx * dx + dy * dy)
 
+        # Recovery check: if top drifts back inside ringout threshold, cancel knockout state
+        if dist <= RINGOUT_RADIUS and self.is_knocked_out:
+            self.is_knocked_out = False
+            self.knockout_timer = 0
+
         if dist >= RINGOUT_RADIUS and not self.is_knocked_out:
             self.is_knocked_out = True
+            self.knockout_timer = 0
             return "ringout"
 
         if dist >= ARENA_RADIUS and not self.is_knocked_out and dist < RINGOUT_RADIUS:

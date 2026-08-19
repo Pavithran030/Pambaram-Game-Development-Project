@@ -105,11 +105,15 @@ def resolve_top_collision(t1, t2, particles):
     nx = dx / dist
     ny = dy / dist
 
-    overlap = (min_dist - dist) * 0.5
-    t1.x -= nx * overlap
-    t1.y -= ny * overlap
-    t2.x += nx * overlap
-    t2.y += ny * overlap
+    total_mass = t1.mass + t2.mass
+    overlap = min_dist - dist
+    w1 = t2.mass / total_mass
+    w2 = t1.mass / total_mass
+
+    t1.x -= nx * overlap * w1
+    t1.y -= ny * overlap * w1
+    t2.x += nx * overlap * w2
+    t2.y += ny * overlap * w2
 
     tx = -ny
     ty = nx

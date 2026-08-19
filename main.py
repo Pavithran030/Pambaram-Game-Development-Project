@@ -18,8 +18,9 @@ class Game:
         except:
             self.sound_enabled = False
 
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Pambaram: Spinning Top Battle Arena")
+        self.fullscreen = False
+        self._init_display()
+
         self.clock = pygame.time.Clock()
         self.running = True
 
@@ -44,7 +45,7 @@ class Game:
 
         self.drag_p1 = None
         self.drag_p2 = None
-        self.countdown = 4
+        self.countdown = 2
         self.countdown_timer = 0
         self.match_started = False
         self.pause_buttons = []
@@ -55,24 +56,54 @@ class Game:
         self._build_pause_buttons()
         self._build_gameover_buttons()
 
+    def _init_display(self):
+        flags = pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE
+        try:
+            if self.fullscreen:
+                self.window = pygame.display.set_mode((0, 0), flags)
+            else:
+                self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
+        except:
+            self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
+            self.fullscreen = False
+        pygame.display.set_caption("Pambaram: Spinning Top Battle Arena")
+        self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    def _toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        self._init_display()
+
+    def _map_mouse_pos(self, pos):
+        win_w, win_h = self.window.get_size()
+        scale = min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+        scaled_w = int(SCREEN_WIDTH * scale)
+        scaled_h = int(SCREEN_HEIGHT * scale)
+        offset_x = (win_w - scaled_w) // 2
+        offset_y = (win_h - scaled_h) // 2
+
+        mx, my = pos
+        rx = (mx - offset_x) / max(1, scale)
+        ry = (my - offset_y) / max(1, scale)
+        return (int(rx), int(ry))
+
     def _build_menu_buttons(self):
-        bw, bh = 340, 70
+        bw, bh = 340, 65
         cx = SCREEN_WIDTH // 2 - bw // 2
-        y_start = 300
-        gap = 85
+        y_start = 280
+        gap = 75
         self.menu_buttons = [
-            Button(cx, y_start, bw, bh, "▶  QUICK MATCH (vs AI)", self._quick_match, 26),
-            Button(cx, y_start + gap, bw, bh, "⚔  VS PLAYER", self._vs_player, 26),
-            Button(cx, y_start + gap * 2, bw, bh, "🎯  TOURNAMENT SETUP", self._start_top_select, 26),
-            Button(cx, y_start + gap * 3, bw, bh, "⚙  AI DIFFICULTY: " + self.ai_difficulty.name, self._cycle_difficulty, 24),
-            Button(cx, y_start + gap * 4, bw, bh, "✖  QUIT", self._quit, 26),
+            Button(cx, y_start, bw, bh, "🤖 PLAYER VS AI", self._quick_match, 24),
+            Button(cx, y_start + gap, bw, bh, "🎮 PLAYER VS PLAYER (MANUAL)", self._vs_player, 22),
+            Button(cx, y_start + gap * 2, bw, bh, "🎯 TOURNAMENT SETUP", self._start_top_select, 24),
+            Button(cx, y_start + gap * 3, bw, bh, "⚙ AI DIFFICULTY: " + self.ai_difficulty.name, self._cycle_difficulty, 22),
+            Button(cx, y_start + gap * 4, bw, bh, "✖ QUIT", self._quit, 24),
         ]
 
     def _build_top_select_buttons(self):
         bw, bh = 200, 55
         self.top_select_buttons = [
             Button(SCREEN_WIDTH - 630, SCREEN_HEIGHT - 105, bw, bh, "◀ BACK", self._back_to_menu, 22),
-            Button(SCREEN_WIDTH - 420, SCREEN_HEIGHT - 105, bw, bh, "🔄 TOGGLE AI: " + ("ON" if self.p2_is_ai else "OFF"), self._toggle_ai, 20),
+            Button(SCREEN_WIDTH - 420, SCREEN_HEIGHT - 105, bw, bh, "MODE: " + ("VS AI" if self.p2_is_ai else "MANUAL 2P"), self._toggle_ai, 20),
             Button(SCREEN_WIDTH - 210, SCREEN_HEIGHT - 105, bw, bh, "NEXT ▶", self._start_arena_select, 22),
         ]
 
@@ -103,11 +134,13 @@ class Game:
 
     def _quick_match(self):
         self.p2_is_ai = True
-        self._start_arena_select_from_menu()
+        self._build_top_select_buttons()
+        self._start_top_select()
 
     def _vs_player(self):
         self.p2_is_ai = False
-        self._start_arena_select_from_menu()
+        self._build_top_select_buttons()
+        self._start_top_select()
 
     def _start_arena_select_from_menu(self):
         self.state = GameState.ARENA_SELECT
@@ -132,7 +165,7 @@ class Game:
 
     def _toggle_ai(self):
         self.p2_is_ai = not self.p2_is_ai
-        self.top_select_buttons[1].text = "🔄 TOGGLE AI: " + ("ON" if self.p2_is_ai else "OFF")
+        self.top_select_buttons[1].text = "MODE: " + ("VS AI" if self.p2_is_ai else "MANUAL 2P")
 
     def _start_match(self):
         p1_preset = TOP_PRESETS.get(self.p1_top_name, list(TOP_PRESETS.values())[2])
@@ -147,7 +180,7 @@ class Game:
         self.particles = ParticleSystem()
         self.drag_p1 = None
         self.drag_p2 = None
-        self.countdown = 4
+        self.countdown = 2
         self.countdown_timer = 0
         self.match_started = False
         self.screen_shake = (0, 0)
@@ -317,7 +350,7 @@ class Game:
 
     def _update_countdown(self, dt):
         self.countdown_timer += dt
-        if self.countdown_timer >= 1.0:
+        if self.countdown_timer >= 0.5:
             self.countdown_timer = 0
             self.countdown -= 1
             if self.countdown < 0:
@@ -414,20 +447,15 @@ class Game:
     def _check_win_conditions(self):
         if not self.match_started:
             return
-        if not self.p1.is_launched and not self.p2.is_launched:
+
+        # Matches only evaluate once BOTH tops have been launched
+        if not (self.p1.is_launched and self.p2.is_launched):
             return
 
-        p1_out = self.p1.is_knocked_out and self.p1.knockout_timer > 0.5
-        p2_out = self.p2.is_knocked_out and self.p2.knockout_timer > 0.5
-        p1_dead = self.p1.is_launched and not self.p1.is_spinning and self.p1.spin <= 0 and not self.p1.is_knocked_out
-        p2_dead = self.p2.is_launched and not self.p2.is_spinning and self.p2.spin <= 0 and not self.p2.is_knocked_out
-
-        if (p1_dead or p2_dead) and (not self.p1.is_launched or not self.p2.is_launched):
-            pass
-        elif p1_dead and not self.p2.is_launched:
-            p1_dead = False
-        elif p2_dead and not self.p1.is_launched:
-            p2_dead = False
+        p1_out = self.p1.is_knocked_out and self.p1.knockout_timer > 1.5
+        p2_out = self.p2.is_knocked_out and self.p2.knockout_timer > 1.5
+        p1_dead = not self.p1.is_spinning and self.p1.spin <= 0 and not self.p1.is_knocked_out
+        p2_dead = not self.p2.is_spinning and self.p2.spin <= 0 and not self.p2.is_knocked_out
 
         reason = ""
         win = None
@@ -449,29 +477,37 @@ class Game:
         elif p2_dead and not p1_dead:
             win = self.p1
             reason = f"SPIN OUT! {self.p2.name} ran out of spin!"
+        elif p1_dead and p2_dead:
+            reason = "DOUBLE SPIN OUT! IT'S A DRAW!"
+            win = None
         elif self.match_time <= 0:
             s1 = self.p1.spin / self.p1.max_spin if self.p1.max_spin > 0 else 0
             s2 = self.p2.spin / self.p2.max_spin if self.p2.max_spin > 0 else 0
-            if s1 > s2:
-                win = self.p1
-                reason = f"TIME UP! {self.p1.name} has more spin remaining!"
-            elif s2 > s1:
-                win = self.p2
-                reason = f"TIME UP! {self.p2.name} has more spin remaining!"
+            if abs(s1 - s2) > 0.02:
+                win = self.p1 if s1 > s2 else self.p2
+                reason = f"TIME UP! {win.name} has more spin remaining!"
             else:
                 reason = "TIME UP! EQUAL SPIN - IT'S A DRAW!"
                 win = None
 
-        if win is not None or (self.match_time <= 0 and self.p1.is_launched and self.p2.is_launched):
+        if win is not None or (self.match_time <= 0 and self.p1.is_launched and self.p2.is_launched) or (p1_dead and p2_dead):
             self.winner = win
             elapsed = MATCH_TIME - max(0, self.match_time)
-            points = 100 if win else 50
+            
+            # Dynamic Score Calculation
+            base_points = 0
+            if win:
+                winning_spin_pct = (win.spin / win.max_spin) * 100 if win.max_spin > 0 else 0
+                time_bonus = max(0, int((MATCH_TIME - elapsed) * 2))
+                ringout_bonus = 150 if "RING OUT" in reason else 100
+                base_points = int(200 + winning_spin_pct * 3 + time_bonus + ringout_bonus)
+            
             self.stats = {
                 "win_reason": reason,
                 "match_time": elapsed,
                 "p1_final_spin": self.p1.spin,
                 "p2_final_spin": self.p2.spin,
-                "points": points if win else 0,
+                "points": base_points,
             }
             self.state = GameState.GAME_OVER
 
@@ -491,6 +527,12 @@ class Game:
                 if event.type == pygame.QUIT:
                     self.running = False
                     break
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                    self._toggle_fullscreen()
+                    continue
+
+                if hasattr(event, "pos"):
+                    event.pos = self._map_mouse_pos(event.pos)
 
                 if self.state == GameState.MENU:
                     self._handle_menu_events(event)
@@ -560,6 +602,16 @@ class Game:
                 elif self.state == GameState.GAME_OVER:
                     draw_game_over(self.screen, self.winner, self.stats, self.gameover_buttons)
 
+            win_w, win_h = self.window.get_size()
+            scale = min(win_w / SCREEN_WIDTH, win_h / SCREEN_HEIGHT)
+            scaled_w = int(SCREEN_WIDTH * scale)
+            scaled_h = int(SCREEN_HEIGHT * scale)
+            offset_x = (win_w - scaled_w) // 2
+            offset_y = (win_h - scaled_h) // 2
+
+            self.window.fill((10, 10, 15))
+            scaled_surf = pygame.transform.smoothscale(self.screen, (scaled_w, scaled_h))
+            self.window.blit(scaled_surf, (offset_x, offset_y))
             pygame.display.flip()
 
         pygame.quit()

@@ -2,28 +2,14 @@ import pygame
 import math
 from config import *
 
-def draw_rounded_rect(surface, rect, color, radius=15, border=0, border_color=None):
+def draw_rounded_rect(surface, rect, color, radius=12, border=0, border_color=None):
     rect = pygame.Rect(rect)
-    if rect.width < radius * 2:
-        radius = rect.width // 2
-    if rect.height < radius * 2:
-        radius = rect.height // 2
-    r = rect
-    inner = pygame.Rect(r.left, r.top + radius, r.width, r.height - 2 * radius)
-    pygame.draw.rect(surface, color, inner, border)
-    inner = pygame.Rect(r.left + radius, r.top, r.width - 2 * radius, r.height)
-    pygame.draw.rect(surface, color, inner, border)
-    for corner in [(r.left + radius, r.top + radius),
-                   (r.right - radius - 1, r.top + radius),
-                   (r.left + radius, r.bottom - radius - 1),
-                   (r.right - radius - 1, r.bottom - radius - 1)]:
-        pygame.draw.circle(surface, color, corner, radius, border)
-    if border > 0 and border_color:
-        for corner in [(r.left + radius, r.top + radius),
-                       (r.right - radius - 1, r.top + radius),
-                       (r.left + radius, r.bottom - radius - 1),
-                       (r.right - radius - 1, r.bottom - radius - 1)]:
-            pygame.draw.circle(surface, border_color, corner, radius, border)
+    if border > 0:
+        pygame.draw.rect(surface, color, rect, border_radius=radius)
+        if border_color:
+            pygame.draw.rect(surface, border_color, rect, width=border, border_radius=radius)
+    else:
+        pygame.draw.rect(surface, color, rect, border_radius=radius)
 
 class Button:
     def __init__(self, x, y, w, h, text, callback=None, font_size=28,
@@ -62,9 +48,8 @@ class Button:
             col = self.hover_color
         else:
             col = self.idle_color
-        draw_rounded_rect(surface, self.rect, col, self.radius)
-        border_c = tuple(min(255, c + 50) for c in col)
-        draw_rounded_rect(surface, self.rect, border_c, self.radius, 2)
+        border_c = COLORS["accent_gold"] if self.hovered else tuple(min(255, c + 25) for c in col)
+        draw_rounded_rect(surface, self.rect, col, self.radius, border=1 if not self.hovered else 2, border_color=border_c)
         font = get_font(self.font_size, bold=True)
         ts = font.render(self.text, True, self.text_color)
         tr = ts.get_rect(center=self.rect.center)
@@ -155,21 +140,20 @@ def draw_special_bar(surface, x, y, w, h, ratio, name="SPECIAL"):
     surface.blit(label_ts, (x + 8, y + h + 2))
 
 def draw_hud(surface, p1, p2, match_time, combo_p1=0, combo_p2=0):
-    hud_font_big = get_font(32, bold=True)
-    hud_font = get_font(18, bold=True)
+    hud_font_big = get_font(28, bold=True)
+    hud_font = get_font(16, bold=True)
 
-    left_panel = pygame.Rect(20, 15, 340, 120)
-    right_panel = pygame.Rect(SCREEN_WIDTH - 360, 15, 340, 120)
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-    draw_rounded_rect(overlay, left_panel, (25, 20, 40, 220), 15)
-    draw_rounded_rect(overlay, right_panel, (25, 20, 40, 220), 15)
-    surface.blit(overlay, (0, 0))
-    draw_rounded_rect(surface, left_panel, COLORS["p1_color"], 15, 2)
-    draw_rounded_rect(surface, right_panel, COLORS["p2_color"], 15, 2)
+    left_panel = pygame.Rect(20, 15, 320, 100)
+    right_panel = pygame.Rect(SCREEN_WIDTH - 340, 15, 320, 100)
+    
+    draw_rounded_rect(surface, left_panel, COLORS["ui_panel"], 12)
+    draw_rounded_rect(surface, right_panel, COLORS["ui_panel"], 12)
+    draw_rounded_rect(surface, left_panel, COLORS["p1_color"], 12, 1)
+    draw_rounded_rect(surface, right_panel, COLORS["p2_color"], 12, 1)
 
-    p1_name = hud_font.render(f"P1  {p1.name}", True, COLORS["p1_color"])
+    p1_name = hud_font.render(f"P1: {p1.name}", True, COLORS["p1_color"])
     surface.blit(p1_name, (left_panel.x + 15, left_panel.y + 10))
-    p2_name = hud_font.render(f"P2  {p2.name}", True, COLORS["p2_color"])
+    p2_name = hud_font.render(f"P2: {p2.name}", True, COLORS["p2_color"])
     surface.blit(p2_name, (right_panel.x + 15, right_panel.y + 10))
 
     p1_type = hud_font.render(p1.type.value, True, COLORS["text_gray"])
@@ -178,70 +162,46 @@ def draw_hud(surface, p1, p2, match_time, combo_p1=0, combo_p2=0):
     surface.blit(p2_type, (right_panel.x + right_panel.width - p2_type.get_width() - 15, right_panel.y + 10))
 
     p1_spin = p1.spin / p1.max_spin if p1.max_spin > 0 else 0
-    draw_spin_bar(surface, left_panel.x + 15, left_panel.y + 40, 310, 22, p1_spin, "SPIN", COLORS["p1_color"])
+    draw_spin_bar(surface, left_panel.x + 15, left_panel.y + 36, 290, 18, p1_spin, "SPIN", COLORS["p1_color"])
 
     p2_spin = p2.spin / p2.max_spin if p2.max_spin > 0 else 0
-    draw_spin_bar(surface, right_panel.x + 15, right_panel.y + 40, 310, 22, p2_spin, "SPIN", COLORS["p2_color"])
+    draw_spin_bar(surface, right_panel.x + 15, right_panel.y + 36, 290, 18, p2_spin, "SPIN", COLORS["p2_color"])
 
-    draw_special_bar(surface, left_panel.x + 15, left_panel.y + 88, 310, 16, p1.special_meter / 100, p1.special_name)
-    draw_special_bar(surface, right_panel.x + 15, right_panel.y + 88, 310, 16, p2.special_meter / 100, p2.special_name)
+    draw_special_bar(surface, left_panel.x + 15, left_panel.y + 75, 290, 14, p1.special_meter / 100, p1.special_name)
+    draw_special_bar(surface, right_panel.x + 15, right_panel.y + 75, 290, 14, p2.special_meter / 100, p2.special_name)
 
-    center_w = 200
-    center_h = 80
-    center_rect = pygame.Rect(SCREEN_WIDTH // 2 - center_w // 2, 20, center_w, center_h)
-    overlay2 = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-    draw_rounded_rect(overlay2, center_rect, (25, 20, 40, 220), 15)
-    surface.blit(overlay2, (0, 0))
-    draw_rounded_rect(surface, center_rect, COLORS["accent_gold"], 15, 2)
+    center_w = 160
+    center_h = 55
+    center_rect = pygame.Rect(SCREEN_WIDTH // 2 - center_w // 2, 15, center_w, center_h)
+    draw_rounded_rect(surface, center_rect, COLORS["ui_panel"], 12)
+    draw_rounded_rect(surface, center_rect, COLORS["accent_gold"], 12, 1)
 
     mins = int(match_time // 60)
     secs = int(match_time % 60)
     time_str = f"{mins:02d}:{secs:02d}"
-    time_ts = hud_font_big.render(time_str, True, COLORS["accent_gold"])
-    time_rect = time_ts.get_rect(center=(SCREEN_WIDTH // 2, 48))
+    time_ts = hud_font_big.render(time_str, True, COLORS["text_white"])
+    time_rect = time_ts.get_rect(center=(SCREEN_WIDTH // 2, 35))
     surface.blit(time_ts, time_rect)
 
-    sub_label = hud_font.render("MATCH TIME", True, COLORS["text_gray"])
-    sub_rect = sub_label.get_rect(center=(SCREEN_WIDTH // 2, 78))
-    surface.blit(sub_label, sub_rect)
-
 def draw_menu(surface, buttons):
-    title_font = get_font(84, bold=True)
-    sub_font = get_font(28)
-    small_font = get_font(18)
-
-    bg_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-    for r in range(400, 100, -30):
-        a = 5
-        pygame.draw.circle(bg_overlay, (100, 50, 180, a), ARENA_CENTER, r)
-    surface.blit(bg_overlay, (0, 0))
+    surface.fill(COLORS["bg_dark"])
+    title_font = get_font(72, bold=True)
+    sub_font = get_font(22)
+    small_font = get_font(15)
 
     title_surf = title_font.render("PAMBARAM", True, COLORS["accent_gold"])
     title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 140))
-    glow = pygame.Surface((title_surf.get_width() + 40, title_surf.get_height() + 40), pygame.SRCALPHA)
-    pygame.draw.circle(glow, (255, 200, 50, 40), glow.get_rect().center, glow.get_width() // 2)
-    surface.blit(glow, (title_rect.x - 20, title_rect.y - 20))
     surface.blit(title_surf, title_rect)
 
     sub = sub_font.render("SPINNING TOP BATTLE ARENA", True, COLORS["text_gray"])
     sub_rect = sub.get_rect(center=(SCREEN_WIDTH // 2, 205))
     surface.blit(sub, sub_rect)
 
-    for angle in range(0, 360, 30):
-        rad = math.radians(angle + pygame.time.get_ticks() * 0.02)
-        cx = SCREEN_WIDTH // 2 + math.cos(rad) * 200
-        cy = 220 + math.sin(rad) * 18
-        pygame.draw.circle(surface, COLORS["accent_gold"], (int(cx), int(cy)), 3)
-
     for b in buttons:
         b.draw(surface)
 
-    hint = small_font.render("A Python Pygame Game Development Project", True, COLORS["text_gray"])
-    hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 40))
-    surface.blit(hint, hint_rect)
-
     tip = small_font.render("Controls:  WASD = Steer  |  SHIFT = Dash  |  SPACE = Special  |  ESC = Pause", True, COLORS["text_gray"])
-    tip_rect = tip.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 18))
+    tip_rect = tip.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 25))
     surface.blit(tip, tip_rect)
 
 def draw_top_select(surface, tops_data, p1_selection, p2_selection, p2_ai, buttons, difficulty):
@@ -272,37 +232,28 @@ def draw_top_select(surface, tops_data, p1_selection, p2_selection, p2_ai, butto
         cy = start_y + row * (card_h + gap_y)
         card_rect = pygame.Rect(cx, cy, card_w, card_h)
 
-        selected = p1_selection == name or p2_selection == name
         p1_sel = p1_selection == name
         p2_sel = p2_selection == name
+        selected = p1_sel or p2_sel
 
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        draw_rounded_rect(overlay, card_rect, (35, 30, 55, 230), 16)
-        surface.blit(overlay, (0, 0))
-        border = COLORS["accent_gold"] if selected else (70, 65, 95)
-        if p1_sel:
-            border = COLORS["p1_color"]
-        if p2_sel:
-            border = COLORS["p2_color"]
-        draw_rounded_rect(surface, card_rect, border, 16, 3)
+        card_bg = COLORS["bg_mid"]
+        draw_rounded_rect(surface, card_rect, card_bg, 10)
+        border = COLORS["p1_color"] if p1_sel else COLORS["p2_color"] if p2_sel else (COLORS["accent_gold"] if selected else (45, 52, 64))
+        draw_rounded_rect(surface, card_rect, border, 10, 2 if selected else 1)
 
-        top_r = 45
+        top_r = 40
         top_cx = card_rect.centerx
-        top_cy = card_rect.y + 70
+        top_cy = card_rect.y + 65
         pygame.draw.circle(surface, preset["color"], (top_cx, top_cy), top_r)
-        pygame.draw.circle(surface, preset["accent"], (top_cx, top_cy), top_r - 18)
-        pygame.draw.circle(surface, (255, 255, 255), (top_cx, top_cy), max(2, top_r - 32))
+        pygame.draw.circle(surface, preset["accent"], (top_cx, top_cy), top_r - 16)
+        pygame.draw.circle(surface, COLORS["bg_dark"], (top_cx, top_cy), max(2, top_r - 30))
 
         name_font = get_font(18, bold=True)
         ts = name_font.render(name, True, COLORS["text_white"])
-        surface.blit(ts, ts.get_rect(center=(card_rect.centerx, card_rect.y + 140)))
+        surface.blit(ts, ts.get_rect(center=(card_rect.centerx, card_rect.y + 130)))
 
-        type_ts = info_font.render(preset["type"].value + " Type", True,
-                                   COLORS["accent_green"] if preset["type"] == TopType.BALANCE
-                                   else COLORS["accent_red"] if preset["type"] == TopType.ATTACK
-                                   else COLORS["accent_blue"] if preset["type"] == TopType.DEFENSE
-                                   else COLORS["accent_purple"])
-        surface.blit(type_ts, type_ts.get_rect(center=(card_rect.centerx, card_rect.y + 165)))
+        type_ts = info_font.render(preset["type"].value + " Type", True, COLORS["text_gray"])
+        surface.blit(type_ts, type_ts.get_rect(center=(card_rect.centerx, card_rect.y + 155)))
 
         stat_y = card_rect.y + 190
         stat_font = get_font(13)

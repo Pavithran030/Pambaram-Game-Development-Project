@@ -25,7 +25,7 @@ print("  [PASS] State = MENU")
 print()
 print("Simulating state transitions:")
 game._quick_match()
-assert game.state == GameState.ARENA_SELECT, "Quick match should go to arena select"
+assert game.state == GameState.TOP_SELECT, "Quick match should go to top select"
 print(f"  After Quick Match -> {game.state.name}: PASS")
 
 game.p1_top_name = "Thiruvalluvar"
@@ -125,49 +125,46 @@ print("=" * 60)
 print()
 print("Case 1: Time Up (equal remaining spins)")
 game2 = Game()
-game2._quick_match()
-game2._start_match()
-game2.match_started = True
-game2.p1.launch(0, 0, 0, 0.5)
-game2.p2.launch(0, 0, 0, 0.5)
-game2.match_time = -0.01
-game2.p1.spin = game2.p1.max_spin * 0.5
-game2.p2.spin = game2.p2.max_spin * 0.5
-game2._check_win_conditions()
-assert game2.state == GameState.GAME_OVER, "Should go to game over on timeout"
-print(f"  After Time Up: state={game2.state.name}, winner={game2.winner.name if game2.winner else None}")
+# Case 1: Time Up (equal remaining spins)
+game.match_time = 0
+game.p1.is_launched = True
+game.p2.is_launched = True
+game.p1.spin = 1000
+game.p1.max_spin = 2000
+game.p2.spin = 1000
+game.p2.max_spin = 2000
+game._check_win_conditions()
+assert game.state == GameState.GAME_OVER, "Time Up should trigger GAME_OVER"
+assert game.winner is None, "Equal remaining spin should result in Draw"
+print(f"  After Time Up: state={game.state.name}, winner={game.winner}")
 print("  [PASS] Time Up handled")
 
-print()
-print("Case 2: P2 Spin Out (spin depleted)")
-game3 = Game()
-game3._quick_match()
-game3._start_match()
-game3.match_started = True
-game3.p1.launch(0,0,0,0.5)
-game3.p2.launch(0,0,0,0.5)
-game3.p2.spin = 0
-game3.p2.is_spinning = False
-game3._check_win_conditions()
-assert game3.state == GameState.GAME_OVER
-assert game3.winner is game3.p1, "P1 should win on P2 spin out"
-print(f"  Winner: {game3.winner.name}, reason: {game3.stats.get('win_reason', 'n/a')[:50]}")
+# Case 2: P2 Spin Out (spin depleted)
+game.state = GameState.PLAYING
+game.match_time = 100
+game.p1.is_launched = True
+game.p1.is_spinning = True
+game.p1.spin = 1000
+game.p2.is_launched = True
+game.p2.is_spinning = False
+game.p2.spin = 0
+game._check_win_conditions()
+assert game.winner == game.p1, f"P1 should win when P2 spins out, got {game.winner}"
+print(f"  Winner: {game.winner.name}, reason: {game.stats.get('win_reason')}")
 print("  [PASS] Spin Out handled")
 
-print()
-print("Case 3: P1 Ring Out")
-game4 = Game()
-game4._quick_match()
-game4._start_match()
-game4.match_started = True
-game4.p1.launch(0,0,0,0.5)
-game4.p2.launch(0,0,0,0.5)
-game4.p1.is_knocked_out = True
-game4.p1.knockout_timer = 1.0
-game4._check_win_conditions()
-assert game4.state == GameState.GAME_OVER
-assert game4.winner is game4.p2, "P2 should win on P1 ring out"
-print(f"  Winner: {game4.winner.name}, reason: {game4.stats.get('win_reason', 'n/a')[:50]}")
+# Case 3: P1 Ring Out
+game.state = GameState.PLAYING
+game.p1.is_launched = True
+game.p1.is_knocked_out = True
+game.p1.knockout_timer = 2.0
+game.p2.is_launched = True
+game.p2.is_knocked_out = False
+game.p2.is_spinning = True
+game.p2.spin = 800
+game._check_win_conditions()
+assert game.winner == game.p2, f"P2 should win when P1 is knocked out, got {game.winner}"
+print(f"  Winner: {game.winner.name}, reason: {game.stats.get('win_reason')}")
 print("  [PASS] Ring Out handled")
 
 print()

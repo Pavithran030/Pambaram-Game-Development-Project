@@ -1,19 +1,21 @@
-# Pambaram Game Development & Implementation Specification
+# Pambaram Game Development - Complete Logic & Architectural Specification
 
-This document provides a comprehensive technical breakdown of the architecture, implementation flow, mathematical physics model, state machine, AI controller, collision mechanics, and user interface logic for **Pambaram: Spinning Top Battle Arena**.
+This document provides a complete, deep-dive specification of the entire software logic, mathematical physics models, display scaling algorithms, game state machine, artificial intelligence decision engine, and collision detection rules for **Pambaram: Spinning Top Battle Arena**.
 
 ---
 
-## 1. System Architecture Overview
+## 1. System Architecture & Module Structure
+
+The project is designed in a decoupled modular structure with Pygame serving as the rendering and event-handling backend.
 
 ```mermaid
 graph TD
-    Main[main.py: Game State Manager & Loop] --> Top[top.py: Top Physics & Abilities]
-    Main --> Arena[arena.py: Boundaries & Collisions]
-    Main --> AI[ai.py: Finite State Machine Controller]
-    Main --> UI[ui.py: Interface & HUD Components]
-    Main --> FX[particles.py: Visual FX & Spark Engine]
-    Main --> Config[config.py: Presets & Enums]
+    Main[main.py: State Machine, Window Engine & Loop] --> Top[top.py: Top Physics, Spin Engine & Abilities]
+    Main --> Arena[arena.py: Boundaries, Hazards & Impulse Resolution]
+    Main --> AI[ai.py: Finite State Machine AI Controller]
+    Main --> UI[ui.py: Interface, HUD & Scaled Surface Renderer]
+    Main --> FX[particles.py: Visual FX & Spark Particle Engine]
+    Main --> Config[config.py: Presets, Theme Colors & Enums]
 
     Arena --> FX
     Top --> Config
@@ -21,115 +23,172 @@ graph TD
     UI --> Config
 ```
 
+### Module Responsibilities:
+1. [`main.py`](file:///E:/Academics/GD/Project/sample1/main.py): Entry point, display initialization, window resizing/scaling canvas engine, game loop at 60 FPS, win condition evaluation, and high-level state dispatching.
+2. [`top.py`](file:///E:/Academics/GD/Project/sample1/top.py): Individual top instance states (positions, translational velocities, angular spin speed, mass, grip, wobbling physics, dash abilities, and special moves).
+3. [`arena.py`](file:///E:/Academics/GD/Project/sample1/arena.py): Arena rendering, obstacle/pillar collision detection, boost pads, circular play boundaries, wall dampening bounce physics, and top-to-top elastic momentum exchange.
+4. [`ai.py`](file:///E:/Academics/GD/Project/sample1/ai.py): Autonomous AI state machine (`IDLE`, `APPROACH`, `ATTACK`, `RETREAT`, `DEFEND`, `SPECIAL`) with 3 difficulty profiles (Easy, Medium, Hard).
+5. [`ui.py`](file:///E:/Academics/GD/Project/sample1/ui.py): Single-pass clean border rendering, buttons, selection cards, match HUD, launch power meters, and pause/victory modal views.
+6. [`particles.py`](file:///E:/Academics/GD/Project/sample1/particles.py): High-performance particle engine emitting sparks, spin trails, dust rings, boost waves, and ring-out explosions.
+7. [`config.py`](file:///E:/Academics/GD/Project/sample1/config.py): Global configuration, display constants, color theme palette, top presets, arena presets, and enums.
+
 ---
 
-## 2. Core Implementation Flow
+## 2. Complete State Machine & Game Lifecycle
 
-### 2.1 Game Lifecycle State Machine
-
-The top-level execution is controlled by `Game` class in [`main.py`](file:///E:/Academics/GD/Project/sample1/main.py) through an `Enum` state machine (`GameState`):
+The execution lifecycle of the game is governed by the `GameState` enum inside [`main.py`](file:///E:/Academics/GD/Project/sample1/main.py):
 
 ```mermaid
 stateDiagram-v2
     [*] --> MENU
-    MENU --> TOP_SELECT : Tournament Setup
-    MENU --> ARENA_SELECT : Quick Match / VS Player
-    TOP_SELECT --> ARENA_SELECT : Next
-    ARENA_SELECT --> PLAYING : Start Match
+    MENU --> TOP_SELECT : Player vs AI / Manual 2P / Tournament Setup
+    TOP_SELECT --> ARENA_SELECT : Next ▶
+    ARENA_SELECT --> PLAYING : START!
     PLAYING --> PAUSED : ESC Key
     PAUSED --> PLAYING : Resume
-    PAUSED --> MENU : Quit to Menu
+    PAUSED --> MENU : Quit to Main Menu
     PLAYING --> GAME_OVER : Win Condition Triggered
-    GAME_OVER --> PLAYING : Rematch
-    GAME_OVER --> MENU : Main Menu
+    GAME_OVER --> PLAYING : Rematch ↻
+    GAME_OVER --> MENU : Main Menu 🏠
 ```
 
-### 2.2 Frame Update Cycle (`60 FPS`)
-
-Every frame during `GameState.PLAYING`, the loop proceeds through the following execution steps:
-
-1. **Input Processing**: Reads mouse drag events (launch power/angle calculation), `WASD` / Arrow key steer vectors, Shift keys (Dash), and Space/Enter (Special abilities).
-2. **AI Logic (`ai.py`)**: Computes directional steer vectors, dash triggers, and special activation based on top distance, remaining spin, and active state.
-3. **Top Physics Update (`top.py`)**: Applies friction decay, angular velocity loss, steer forces, dash boosts, special ability cooldowns, and trail particle updates.
-4. **Arena Dynamics (`arena.py`)**: Resolves top-to-top momentum exchange, arena wall bounce damping, ring-out out-of-bounds detection, pillar collisions, and neon boost pad triggers.
-5. **Particle System (`particles.py`)**: Advances particle lifetimes, positions, and alpha blits.
-6. **Win Condition Checks**: Validates if any top has hit $0$ spin energy or crossed the $R > 320\text{px}$ ring-out boundary, or if the match timer reached $0$.
-7. **Screen Render**: Draws background layers, arena rings, obstacles, boost pads, particle trails, tops, launch indicators, HUD overlays, and active screen shake offsets.
+### Execution States Detailed:
+- **`MENU`**: Main title screen. Allows selecting **Player vs AI**, **Player vs Player (Manual 2P)**, **Tournament Setup**, and **AI Difficulty** toggles.
+- **`TOP_SELECT`**: Grid of top selection cards. Allows assigning Player 1 top (Left-Click) and Player 2/AI top (Right-Click), while toggling AI / 2P mode dynamically.
+- **`ARENA_SELECT`**: Displays 4 selectable arena cards with distinct floor grip modifiers and hazard types.
+- **`PLAYING`**: Active match state. Executes the 60 FPS update loop: input mapping $\rightarrow$ AI decisions $\rightarrow$ physics updates $\rightarrow$ boundary checks $\rightarrow$ collisions $\rightarrow$ particle FX $\rightarrow$ win checks.
+- **`PAUSED`**: Pauses match updates, renders a dark overlay with Resume, Restart, and Main Menu buttons.
+- **`GAME_OVER`**: Triggered when a win condition evaluates. Displays the match winner, elimination reason, elapsed match duration, final remaining spins, and dynamic score calculation.
 
 ---
 
-## 3. Mathematical Physics & Collision Equations
+## 3. Frame Update Loop & Coordinate Scaling Engine
 
-### 3.1 Spin Decay Equation
-Spin energy ($\Omega$) decays over time ($t$) based on base decay rate ($\delta$), grip modifier ($\mu_a$), and active steering penalty ($\sigma$):
+### 3.1 60 FPS Frame Pipeline
 
-$$\Omega_{t+\Delta t} = \max\left(0, \Omega_t - (\delta \cdot \mu_a + \sigma) \cdot \Delta t\right)$$
+Every frame during `GameState.PLAYING`, the engine runs the following sequence:
 
-Where steering penalty $\sigma = 15.0$ when actively steering, and $0$ otherwise.
+```mermaid
+flowchart TD
+    Tick[1. Clock Tick: 60 FPS] --> Events[2. Poll Pygame Events & Translate Mouse Coordinates]
+    Events --> KeyState[3. Read Key Inputs: WASD / Arrow Keys / Shift / Space]
+    KeyState --> AICheck{Is P2 AI Active?}
+    AICheck -- Yes --> AIDecide[4. Run AI Controller Update]
+    AICheck -- No --> ManualP2[4. Map P2 Keyboard Inputs]
+    AIDecide --> Physics[5. Update Top Positions, Spin Decay & Wobble]
+    ManualP2 --> Physics
+    Physics --> ArenaUpdate[6. Check Arena Boundaries, Pillars & Boost Pads]
+    ArenaUpdate --> Collisions[7. Resolve Top-to-Top Elastic Collisions & Spin Drain]
+    Collisions --> FXUpdate[8. Update Particle Lifetimes & Screen Shake Decay]
+    FXUpdate --> WinCheck[9. Evaluate Win Conditions]
+    WinCheck --> Render[10. Render Frame to 1200x800 Virtual Surface]
+    Render --> ScaleBlit[11. Scale Surface to Window Resolution & Flip Display]
+```
 
-### 3.2 Dynamic Mass & Gyroscopic Steering
+### 3.2 Display Scaling & Mouse Position Translation Engine
 
-Translational acceleration $(\vec{a})$ derived from steer input vector $(\vec{u})$ is scaled by spin ratio $r_s = \frac{\Omega}{\Omega_{\max}}$ and top grip $(G)$:
+To ensure full-screen, windowed, and resizable compatibility without distorting game graphics, all drawing occurs on an internal **$1200 \times 800$ virtual canvas (`self.screen`)**, which is then scaled to the target window resolution (`self.window`).
 
-$$\vec{a}_{\text{steer}} = \vec{u} \cdot \left(\frac{180 \cdot G \cdot \mu_a \cdot (0.3 + 0.7 r_s)}{m}\right)$$
+#### Canvas Scaling Algorithm:
+Given target window dimensions $(W_w, H_w)$ and base canvas dimensions $(1200, 800)$:
 
-### 3.3 Elastic Collision & Momentum Transfer
+$$\text{scale} = \min\left(\frac{W_w}{1200}, \frac{H_w}{800}\right)$$
 
-When two tops collide ($|\vec{p}_2 - \vec{p}_1| < R_1 + R_2$), normal vector $\hat{n}$ and tangent vector $\hat{t}$ are derived:
+$$\text{Width}_{\text{scaled}} = 1200 \cdot \text{scale}, \quad \text{Height}_{\text{scaled}} = 800 \cdot \text{scale}$$
 
-$$\hat{n} = \frac{\vec{p}_2 - \vec{p}_1}{|\vec{p}_2 - \vec{p}_1|}, \quad \hat{t} = \begin{pmatrix} -\hat{n}_y \\ \hat{n}_x \end{pmatrix}$$
+$$\text{Offset}_x = \frac{W_w - \text{Width}_{\text{scaled}}}{2}, \quad \text{Offset}_y = \frac{H_w - \text{Height}_{\text{scaled}}}{2}$$
 
-Velocities are projected into normal components $v_{1n}, v_{2n}$. The relative normal velocity is:
+#### Mouse Coordinate Translation Algorithm:
+For any raw OS mouse event at window position $(X_m, Y_m)$, the mapped virtual coordinate $(X_v, Y_v)$ on the $1200 \times 800$ surface is calculated as:
 
-$$v_{\text{rel}} = v_{1n} - v_{2n}$$
+$$X_v = \frac{X_m - \text{Offset}_x}{\text{scale}}, \quad Y_v = \frac{Y_m - \text{Offset}_y}{\text{scale}}$$
 
-Using coefficient of restitution $e = 0.85$, the impulse magnitude $J$ is calculated using effective masses $m_1, m_2$:
+This guarantees accurate button clicks and launch drag vectors on any monitor resolution or aspect ratio.
 
-$$J = \frac{-(1 + e) \cdot v_{\text{rel}}}{\frac{1}{m_1} + \frac{1}{m_2}}$$
+---
+
+## 4. Mathematical Physics Model
+
+### 4.1 Angular Velocity & Spin Decay Engine
+
+Every spinning top starts with initial spin energy $\Omega_0 = \Omega_{\max} \cdot f_{\text{launch}}$, where $f_{\text{launch}} \in [0.5, 1.0]$. Spin energy $\Omega$ degrades over time $t$ according to:
+
+$$\Omega_{t+\Delta t} = \max\left(0, \Omega_t - (\delta \cdot \mu_a \cdot k_{\text{dash}}) \cdot \Delta t\right)$$
+
+Where:
+- $\delta$: Base spin decay rate defined in top preset (e.g., $150$ for Velu Vettaikaran).
+- $\mu_a$: Arena floor grip modifier ($1.0$ for Village Ground, $0.65$ for slippery River Bed).
+- $k_{\text{dash}}$: Dash multiplier ($2.5$ when top is dashing, $1.0$ otherwise).
+
+### 4.2 Gyroscopic Wobble Physics
+
+As a top's spin ratio $r_s = \frac{\Omega}{\Omega_{\max}}$ drops, gyroscopic stability decreases and wobbling increases:
+
+$$W = \max\left(0, (1.0 - r_s) \cdot 15\right) + \begin{cases} \sin(0.02 \cdot \text{ticks}) \cdot (5 - 25 r_s) & \text{if } r_s < 0.2 \\ 0 & \text{otherwise} \end{cases}$$
+
+### 4.3 Steering Force & Friction Acceleration
+
+Translational movement vector $\vec{u} = (u_x, u_y)$ accelerates top velocity $\vec{v} = (v_x, v_y)$:
+
+$$G_{\text{effective}} = G_{\text{top}} \cdot \mu_a$$
+
+$$P_{\text{steer}} = 250 \cdot G_{\text{effective}} \cdot (0.3 + 0.7 r_s) \cdot (2.5 \text{ if dashing else } 1.0)$$
+
+$$\vec{a}_{\text{steer}} = \frac{\vec{u} \cdot P_{\text{steer}} - 0.5 \vec{v}}{1.0 + 0.5 (1.0 - r_s)}$$
+
+$$\vec{v}_{t+\Delta t} = \vec{v}_t + \vec{a}_{\text{steer}} \cdot \Delta t$$
+
+Surface drag reduces speed based on grip and spin ratio:
+
+$$\text{Drag} = 0.4 \cdot G_{\text{effective}} \cdot \Delta t \cdot \left(1 + 0.5(1 - r_s)\right)$$
+
+$$\vec{v}_{\text{dragged}} = \vec{v} \cdot \max\left(0, 1.0 - \text{Drag}\right)$$
+
+---
+
+## 5. Collision & Boundary Resolution Logic
+
+### 5.1 Elastic Top-to-Top Collision Impulse
+
+When distance $d = |\vec{p}_2 - \vec{p}_1| < R_1 + R_2$, normal vector $\hat{n}$ and relative velocity $\vec{v}_{\text{rel}}$ are computed:
+
+$$\hat{n} = \frac{\vec{p}_2 - \vec{p}_1}{d}, \quad \vec{v}_{\text{rel}} = \vec{v}_1 - \vec{v}_2$$
+
+$$v_{1n} = \vec{v}_1 \cdot \hat{n}, \quad v_{2n} = \vec{v}_2 \cdot \hat{n}$$
+
+Using coefficient of restitution $e = 0.85$, normal impulse magnitude $J$ is:
+
+$$J = \frac{-(1 + e) \cdot (v_{1n} - v_{2n})}{\frac{1}{m_1} + \frac{1}{m_2}}$$
 
 Post-collision velocities:
 
-$$\vec{v}_1' = \vec{v}_1 - \frac{J}{m_1}\hat{n}, \quad \vec{v}_2' = \vec{v}_2 + \frac{J}{m_2}\hat{n}$$
+$$\vec{v}_1' = \vec{v}_1 + \frac{J}{m_1}\hat{n}, \quad \vec{v}_2' = \vec{v}_2 - \frac{J}{m_2}\hat{n}$$
 
-### 3.4 Spin Friction Loss from Collision Impact
+Overlapping tops are separated along normal $\hat{n}$ by overlap distance $\Delta d = (R_1 + R_2 - d) / 2$.
 
-Impact magnitude $I = |J|$ degrades spin energy of both tops proportionally to collision intensity and opponent mass ratio:
+### 5.2 Collision Impact Spin Drain
+
+The physical impact magnitude $I = |J|$ degrades spin energy of both colliding tops:
 
 $$\Delta \Omega_1 = \min\left(\Omega_1, \frac{I \cdot m_2}{m_1} \cdot 0.8\right)$$
 
 $$\Delta \Omega_2 = \min\left(\Omega_2, \frac{I \cdot m_1}{m_2} \cdot 0.8\right)$$
 
----
+### 5.3 Arena Boundary Dynamics
 
-## 4. Playable Characters & Arenas Specification
+The arena is centered at $\vec{C} = (600, 450)$:
+- **Play Radius** ($R \le 280\text{px}$): Standard movement.
+- **Bounce Zone** ($280\text{px} < R \le 320\text{px}$): Normal velocity component is reversed with dampening factor $0.65$:
 
-### 4.1 Top Presets (`TOP_PRESETS`)
+$$\vec{v}_{\text{bounce}} = \vec{v} - 1.65 (\vec{v} \cdot \hat{n}_{\text{arena}})\hat{n}_{\text{arena}}$$
 
-| Name | Type | Mass ($m$) | Max Spin | Spin Decay | Grip | Special Ability | Description |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Velu Vettaikaran** | Attack | 3.5 | 1800 | 90 | 1.2 | **Ram Strike** | Speed dash + Invincibility + Boosted Mass |
-| **Veerapandiya** | Attack | 3.2 | 1950 | 95 | 1.1 | **Ram Strike** | Aggressive, heavy collision strike |
-| **Kottai Veeran** | Defense | 4.5 | 1400 | 50 | 1.5 | **Iron Wall** | Mass doubled ($2\times$) + Invincibility |
-| **Kallazhagar** | Defense | 4.8 | 1350 | 45 | 1.6 | **Iron Wall** | Immovable defense top |
-| **Thiruvalluvar** | Balance | 2.5 | 1700 | 70 | 1.3 | **Spin Boost** | Restores $+40\%$ max spin instantly |
-| **Maruthuvar** | Balance | 2.7 | 1650 | 65 | 1.35 | **Spin Boost** | All-rounder, steady stability |
-| **Puyal Kaalai** | Speed | 1.8 | 2200 | 110 | 1.0 | **Whirlwind** | Pulls opponent top toward self |
-| **Sooravali** | Speed | 1.6 | 2350 | 120 | 0.95 | **Whirlwind** | Blazing speed, highly responsive steer |
-
-### 4.2 Arena Presets (`ARENA_PRESETS`)
-
-| Arena Name | English Name | Floor Grip Mod ($\mu_a$) | Special Feature / Hazard |
-| :--- | :--- | :--- | :--- |
-| **Gramam Thidal** | Village Ground | 1.0 | Flat clay surface — standard physics |
-| **Kovil Prangaram** | Temple Courtyard | 1.1 | 4 Stone pillars acting as rigid bounce obstacles |
-| **Aaru Paarai** | River Bed | 0.65 | Low friction sand — sliding physics & reduced steer |
-| **Neon Arangam** | Neon Arena | 1.0 | 4 Cyber boost pads giving velocity + spin refills |
+- **Ring Out Zone** ($R > 320\text{px}$): Triggers `is_knocked_out = True` and initiates knockout timer ($t_{\text{ko}}$).
 
 ---
 
-## 5. AI Controller State Machine (`ai.py`)
+## 6. Artificial Intelligence Decision Engine (`ai.py`)
 
-The AI evaluates opponent distance $d = |\vec{p}_{\text{opponent}} - \vec{p}_{\text{AI}}|$ and arena radius $r = |\vec{p}_{\text{AI}} - \vec{C}|$ to transition between 6 states:
+The AI controller runs a Finite State Machine (FSM) evaluating distance to opponent $d = |\vec{p}_{\text{opp}} - \vec{p}_{\text{AI}}|$, spin ratio $r_s$, and center distance $r_c = |\vec{p}_{\text{AI}} - \vec{C}|$:
 
 ```mermaid
 graph TD
@@ -142,42 +201,51 @@ graph TD
     Attack --> Special[SPECIAL: Meter Full & Close Range]
 ```
 
-### AI Difficulty Tiers:
-* **EASY**: Reaction delay $= 0.35\text{s}$, low dash rate ($15\%$), random target offsets ($\pm 40\text{px}$).
-* **MEDIUM**: Reaction delay $= 0.18\text{s}$, moderate dash rate ($45\%$), accurate trajectory tracking.
-* **HARD**: Reaction delay $= 0.05\text{s}$, high dash rate ($80\%$), instant special activation upon condition match.
+### AI Difficulty Matrix:
+
+| Feature | EASY | MEDIUM | HARD |
+| :--- | :--- | :--- | :--- |
+| **Decision Interval** | $0.8\text{s}$ | $0.4\text{s}$ | $0.2\text{s}$ |
+| **Target Error Offset** | $\pm 40\text{px}$ | $\pm 15\text{px}$ | $0\text{px}$ (Exact) |
+| **Dash Rate** | $15\%$ | $45\%$ | $80\%$ |
+| **Special Ability Use** | Trigger $>90\%$ meter | Trigger $>75\%$ meter | Trigger $>60\%$ meter |
 
 ---
 
-## 6. Win Conditions & Boundary Logic
+## 7. Win Conditions & Dynamic Score Engine
 
-Arena geometry centered at $\vec{C} = (600, 450)$:
-* **Play Radius**: $R_{\text{play}} = 280\text{px}$
-* **Bounce Zone**: $280\text{px} < R \le 320\text{px}$ (Applies wall bounce dampening with $0.65\times$ speed reduction).
-* **Ring Out Zone**: $R > 320\text{px}$ (Triggers instant Ring Out elimination).
+### 7.1 Double-Launch Requirement & Win Evaluation
+
+To eliminate accidental single-launch instant wins, match evaluation strictly requires **both tops to have entered play** ($\text{is\_launched}_1 \text{ and } \text{is\_launched}_2$).
 
 ```mermaid
 flowchart TD
-    CheckFrame[Frame Boundary Check] --> SpinCheck{Spin Energy <= 0?}
-    SpinCheck -- Yes --> SpinOut[Declare Winner by SPIN OUT]
-    SpinCheck -- No --> PosCheck{Distance from Center > 320px?}
-    PosCheck -- Yes --> RingOut[Declare Winner by RING OUT]
-    PosCheck -- No --> TimerCheck{Match Timer <= 0?}
-    TimerCheck -- Yes --> TimeOut[Compare Remaining Spin %]
-    TimerCheck -- No --> ContinueMatch[Continue Gameplay]
+    StartCheck[Frame Win Evaluation] --> LaunchCheck{Both Tops Launched?}
+    LaunchCheck -- No --> ContinueGame[Continue Match Update]
+    LaunchCheck -- Yes --> KO1{P1 Knocked Out > 1.5s?}
+    KO1 -- Yes --> KO2{P2 Knocked Out > 1.5s?}
+    KO2 -- Yes --> DrawKO[Declare DOUBLE RING OUT]
+    KO2 -- No --> WinP2[Declare P2 RING OUT WIN]
+    KO1 -- No --> SpinOutCheck{P1 or P2 Spin <= 0?}
+    SpinOutCheck -- Yes --> DetermineSpinWin[Declare SPIN OUT Winner]
+    SpinOutCheck -- No --> TimeCheck{Match Time <= 0?}
+    TimeCheck -- Yes --> CompareSpin[Compare Remaining Spin %]
+    TimeCheck -- No --> ContinueGame
 ```
+
+### 7.2 Dynamic Score Calculation Formula
+
+When a match ends with a valid winner, score points ($S$) are calculated dynamically based on performance:
+
+$$S = \begin{cases} \left\lfloor 200 + \left(\frac{\Omega_{\text{winner}}}{\Omega_{\max}} \cdot 100\right) \cdot 3 + \max(0, (180 - t_{\text{elapsed}}) \cdot 2) + B_{\text{reason}} \right\rfloor & \text{if Winner} \\ 0 & \text{if Draw} \end{cases}$$
+
+Where elimination reason bonus $B_{\text{reason}} = 150$ for *Ring Out* and $100$ for *Spin Out*.
 
 ---
 
-## 7. Development & Verification Standard
+## 8. Summary of All Logic Modules
 
-The implementation logic was validated across unit, integration, physics engine, and headless UI rendering test suites:
-
-- **Physics & Collision Suite**: [`test_logic.py`](file:///E:/Academics/GD/Project/sample1/test_logic.py)
-- **UI & Mouse Event Suite**: [`test_ui.py`](file:///E:/Academics/GD/Project/sample1/test_ui.py)
-- **End-to-End Game Manager Suite**: [`test_integration.py`](file:///E:/Academics/GD/Project/sample1/test_integration.py)
-
-To verify the game engine locally:
-```bash
-python -m unittest discover
-```
+- **Rendering Engine**: Pygame surface canvas with aspect-ratio scaling and transformed mouse coordinate mapping.
+- **Physics Engine**: Differential angular spin decay, gyroscopic wobbling, directional steer resistance, dynamic mass acceleration, and 2D elastic vector collision resolution.
+- **AI Engine**: FSM AI controller adjusting attack, defense, retreat, and special abilities across 3 difficulty tiers.
+- **UI Engine**: Single-pass clean border rounded rectangles, responsive buttons, top/arena selection cards, live HUD meters, and victory stats modal.
