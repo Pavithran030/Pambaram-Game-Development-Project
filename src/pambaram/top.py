@@ -1,7 +1,15 @@
 import pygame
+import pygame.gfxdraw
 import math
 import random
-from config import *
+from .config import *
+
+
+def _shade(color, factor):
+    """Lighten (factor > 0) or darken (factor < 0) an RGB tuple."""
+    if factor >= 0:
+        return tuple(min(255, int(c + (255 - c) * factor)) for c in color)
+    return tuple(max(0, int(c * (1 + factor))) for c in color)
 
 class Top:
     def __init__(self, name, preset, player_id, is_ai=False, difficulty=Difficulty.MEDIUM):
@@ -174,7 +182,7 @@ class Top:
         self.is_dashing = True
         self.dash_timer = 0.25
         self.dash_cooldown = 1.5
-        self.spin -= self.max_spin * 0.08
+        self.spin = max(0, self.spin - self.max_spin * 0.08)
         self.special_meter = min(100, self.special_meter + 5)
         return True
 
@@ -213,7 +221,7 @@ class Top:
             self.special_timer = 2.5
             if all_tops:
                 for other in all_tops:
-                    if other is not self and not other.is_knocked_out:
+                    if other is not self and other.is_launched and not other.is_knocked_out:
                         dx = self.x - other.x
                         dy = self.y - other.y
                         dist = math.sqrt(dx * dx + dy * dy)
@@ -283,18 +291,29 @@ class Top:
         py = int(self.y + sy)
         r = int(self.radius)
 
+        if not self.is_launched:
+            # Pulsing ring cue so it's obvious this top can be grabbed and
+            # flung - a top never has both is_launched=False and
+            # is_knocked_out=True, so this can't collide with the KO fade below.
+            pulse = (math.sin(pygame.time.get_ticks() * 0.004) + 1) * 0.5
+            ring_r = r + 12 + int(pulse * 7)
+            ring_alpha = 90 + int(pulse * 90)
+            ring_surf = pygame.Surface((ring_r * 2 + 8, ring_r * 2 + 8), pygame.SRCALPHA)
+            ring_col = tuple(min(255, c + 50) for c in self.accent)
+            for rr in (ring_r - 1, ring_r, ring_r + 1):
+                pygame.gfxdraw.aacircle(ring_surf, ring_r + 4, ring_r + 4, rr, (*ring_col, ring_alpha))
+            surface.blit(ring_surf, (px - ring_r - 4, py - ring_r - 4))
+
         if self.is_knocked_out:
-            fade = max(30, 255 - int(self.knockout_timer * 300))
-            fade_color = (
-                max(0, min(255, self.color[0])),
-                max(0, min(255, self.color[1])),
-                max(0, min(255, self.color[2])),
-            )
-            pygame.draw.circle(surface, fade_color, (px, py), max(2, r - int(self.knockout_timer * 15)))
+            fade_r = max(2, r - int(self.knockout_timer * 15))
+            pygame.gfxdraw.filled_circle(surface, px, py, fade_r, self.color)
+            pygame.gfxdraw.aacircle(surface, px, py, fade_r, self.color)
             return
 
         wobble_dx = math.sin(self.rotation * 3) * self.wobble * 0.5
         wobble_dy = math.cos(self.rotation * 2) * self.wobble * 0.3
+        cx = px + int(wobble_dx)
+        cy = py + int(wobble_dy)
 
         if self.special_active:
             if self.type == TopType.ATTACK:
@@ -315,38 +334,66 @@ class Top:
             if blink:
                 pygame.draw.circle(surface, (255, 255, 255), (px, py), r + 5, 2)
 
-        outer_rect = pygame.Rect(px - r + wobble_dx, py - r + wobble_dy, r * 2, r * 2)
-        pygame.draw.ellipse(surface, self.color, outer_rect)
+        rim_color = _shade(self.color, -0.32)
+        light_color = _shade(self.color, 0.30)
 
-        rim_color = tuple(min(255, max(0, c - 60)) for c in self.color)
-        pygame.draw.ellipse(surface, rim_color, outer_rect, 3)
+        # Soft grounded shadow, offset slightly for a hint of depth.
+        shadow_r = max(1, int(r * 0.92))
+        shadow_surf = pygame.Surface((shadow_r * 2 + 4, shadow_r * 2 + 4), pygame.SRCALPHA)
+        pygame.gfxdraw.filled_circle(shadow_surf, shadow_r + 2, shadow_r + 2, shadow_r, (0, 0, 0, 80))
+        surface.blit(shadow_surf, (px - shadow_r - 2 + 4, py - shadow_r - 2 + 5))
 
-        inner_r = int(r * 0.6)
+        # Domed body: concentric shaded rings from a dark rim to a lit core,
+        # instead of one flat fill, so it reads as a rounded toy top.
+        steps = 5
+        for i in range(steps, -1, -1):
+            t = i / steps
+            rad = max(1, int(r * (0.32 + 0.68 * t)))
+            col = tuple(int(rim_color[k] * t + light_color[k] * (1 - t)) for k in range(3))
+            pygame.gfxdraw.filled_circle(surface, cx, cy, rad, col)
+        pygame.gfxdraw.aacircle(surface, cx, cy, r, rim_color)
+
+        # Accent cap, offset slightly as spin winds down, shaded the same way.
+        inner_r = max(2, int(r * 0.58))
         spin_r = 1 - (self.spin / self.max_spin if self.max_spin > 0 else 0)
-        inner_offset_x = math.cos(self.rotation) * spin_r * 4
-        inner_offset_y = math.sin(self.rotation) * spin_r * 4
-        inner_rect = pygame.Rect(
-            px - inner_r + wobble_dx * 0.5 + inner_offset_x,
-            py - inner_r + wobble_dy * 0.5 + inner_offset_y,
-            inner_r * 2,
-            inner_r * 2,
-        )
-        pygame.draw.ellipse(surface, self.accent, inner_rect)
+        acx = int(cx + math.cos(self.rotation) * spin_r * 4)
+        acy = int(cy + math.sin(self.rotation) * spin_r * 4)
+        accent_rim = _shade(self.accent, -0.22)
+        accent_light = _shade(self.accent, 0.28)
+        for i in range(3, -1, -1):
+            t = i / 3
+            rad = max(1, int(inner_r * (0.42 + 0.58 * t)))
+            col = tuple(int(accent_rim[k] * t + accent_light[k] * (1 - t)) for k in range(3))
+            pygame.gfxdraw.filled_circle(surface, acx, acy, rad, col)
+        pygame.gfxdraw.aacircle(surface, acx, acy, inner_r, accent_rim)
 
-        center_r = int(r * 0.25)
-        pygame.draw.circle(surface, rim_color, (px, py), center_r)
-        pygame.draw.circle(surface, (255, 255, 255), (px, py), max(2, center_r - 3))
-
+        # Spin blades: crisp and thick once it's slowing down, thin and
+        # bright while spinning fast (reads like motion blur).
+        spin_ratio = self.spin / self.max_spin if self.max_spin > 0 else 0
+        center_r = max(3, int(r * 0.22))
+        if spin_ratio < 0.15:
+            blade_w, blade_col = 3, rim_color
+        elif spin_ratio < 0.5:
+            blade_w, blade_col = 2, rim_color
+        else:
+            blade_w, blade_col = 1, tuple(min(255, c + 50) for c in rim_color)
         for i in range(4):
             ang = self.rotation + i * (math.pi / 2)
-            line_x1 = px + math.cos(ang) * center_r
-            line_y1 = py + math.sin(ang) * center_r
-            line_x2 = px + math.cos(ang) * (r - 2)
-            line_y2 = py + math.sin(ang) * (r - 2)
-            pygame.draw.line(surface, rim_color, (int(line_x1), int(line_y1)), (int(line_x2), int(line_y2)), 2)
+            x1 = cx + math.cos(ang) * center_r
+            y1 = cy + math.sin(ang) * center_r
+            x2 = cx + math.cos(ang) * (r - 3)
+            y2 = cy + math.sin(ang) * (r - 3)
+            pygame.draw.line(surface, blade_col, (int(x1), int(y1)), (int(x2), int(y2)), blade_w)
 
-        label_color = COLORS["text_white"]
-        if self.player_id == 1:
-            pygame.draw.circle(surface, COLORS["p1_color"], (px + r + 8, py - r - 8), 6)
-        else:
-            pygame.draw.circle(surface, COLORS["p2_color"], (px + r + 8, py - r - 8), 6)
+        # Center hub: small metal-bearing look.
+        pygame.gfxdraw.filled_circle(surface, cx, cy, center_r, rim_color)
+        pygame.gfxdraw.aacircle(surface, cx, cy, center_r, rim_color)
+        hub_hl_r = max(2, center_r - 3)
+        pygame.gfxdraw.filled_circle(surface, cx, cy, hub_hl_r, (250, 250, 252))
+        pygame.gfxdraw.aacircle(surface, cx, cy, hub_hl_r, (250, 250, 252))
+
+        # Small player badge, tucked at the bottom-right of the body.
+        badge_col = COLORS["p1_color"] if self.player_id == 1 else COLORS["p2_color"]
+        bx, by = px + int(r * 0.74), py + int(r * 0.74)
+        pygame.gfxdraw.filled_circle(surface, bx, by, 7, badge_col)
+        pygame.gfxdraw.aacircle(surface, bx, by, 7, (18, 19, 24))

@@ -111,18 +111,32 @@ If the 3-minute timer runs out, whoever has the most spin wins.
 
 ```
 sample1/
-├── main.py              # Game entry point & Game Manager (state machine, loop)
-├── config.py            # All constants, top/arena presets, colors, enums
-├── top.py               # Top class: physics, spin, movement, specials
-├── arena.py             # Arena rendering, collision detection, hazards
-├── ai.py                  # AI Controller: state machine & difficulty levels
-├── particles.py     # Particle effects: dust, sparks, trails, ring-out
-├── ui.py                  # UI Components: buttons, bars, menus, HUD, screens
-├── .env              # Game configuration variables
-├── requirements.txt       # Python dependencies
-├── install.bat         # Windows installer (double-click)
-├── run_game.bat      # Windows game launcher (double-click)
-└── Pambaram_Game_Development_Plan.md   # Original design document
+├── main.py                    # Entry point shim - puts src/ on the path and runs the game
+├── requirements.txt           # Python dependencies
+├── install.bat                # Windows installer (double-click)
+├── run_game.bat                # Windows game launcher (double-click)
+├── .env                        # Game configuration variables
+│
+├── src/pambaram/                # The game package
+│   ├── main.py                # Game Manager: state machine, main loop
+│   ├── config.py              # All constants, top/arena presets, colors, enums
+│   ├── top.py                 # Top class: physics, spin, movement, specials
+│   ├── arena.py                # Arena rendering, collision detection, hazards
+│   ├── ai.py                    # AI Controller: state machine & difficulty levels
+│   ├── particles.py         # Particle effects: dust, sparks, trails, ring-out
+│   ├── ui.py                    # UI Components: buttons, bars, menus, HUD, screens
+│   └── sound.py                # Procedurally synthesized SFX (no audio assets needed)
+│
+├── tests/                        # Logic / UI / integration smoke tests
+│   ├── test_logic.py
+│   ├── test_ui.py
+│   └── test_integration.py
+│
+└── docs/                         # Design docs & reference screenshots
+    ├── Pambaram_Game_Development_Plan.md
+    ├── Pambaram_Implementation_Flow_and_Logic.md
+    ├── Pambaram_Implementation_Flow_and_Logic_v2.md
+    └── screenshots/
 ```
 
 ---
@@ -194,9 +208,20 @@ Then read the error message.
 
 ---
 
+## Running Tests
+
+Smoke tests for physics/logic, UI rendering, and full game-manager integration:
+```bash
+python tests/test_logic.py
+python tests/test_ui.py
+python tests/test_integration.py
+```
+
+---
+
 ## Development Roadmap Reference
 
-The game implements features from **Phase 1 & 1 (Core Prototype) and **Phase 2 (Gameplay Polish) of the design document:
+The game implements features from **Phase 1 & 1 (Core Prototype) and **Phase 2 (Gameplay Polish) of the [design document](docs/Pambaram_Game_Development_Plan.md):
 - ✅ Phase 1 - Core Prototype (Weeks 1-2)
 - ✅ Phase 2 - Gameplay Polish (Weeks 3-4)
 - ⬜ Phase 3 - Content & Progression (Weeks 5-6)

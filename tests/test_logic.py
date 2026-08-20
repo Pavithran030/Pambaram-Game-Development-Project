@@ -1,12 +1,12 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 print("=" * 60)
 print("LOGIC TEST 1: Top Physics & State")
 print("=" * 60)
-from config import TOP_PRESETS, ARENA_CENTER, ARENA_RADIUS, RINGOUT_RADIUS, TopType
-from top import Top
+from pambaram.config import TOP_PRESETS, ARENA_CENTER, ARENA_RADIUS, RINGOUT_RADIUS, TopType
+from pambaram.top import Top
 
 preset1 = list(TOP_PRESETS.values())[0]
 t1 = Top('TestTop', preset1, 1)
@@ -109,8 +109,8 @@ print()
 print("=" * 60)
 print("LOGIC TEST 4: Collision & Momentum")
 print("=" * 60)
-from arena import resolve_top_collision
-from particles import ParticleSystem
+from pambaram.arena import resolve_top_collision
+from pambaram.particles import ParticleSystem
 
 ps = ParticleSystem()
 pa = Top('Attacker', TOP_PRESETS['Velu Vettaikaran'], 1)
@@ -141,8 +141,8 @@ print()
 print("=" * 60)
 print("LOGIC TEST 5: AI Controller")
 print("=" * 60)
-from ai import AIController
-from config import Difficulty
+from pambaram.ai import AIController
+from pambaram.config import Difficulty
 
 player_top = Top('Player', preset1, 1)
 ai_top = Top('AI', list(TOP_PRESETS.values())[1], 2, True, Difficulty.MEDIUM)

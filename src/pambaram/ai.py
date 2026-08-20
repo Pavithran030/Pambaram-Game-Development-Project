@@ -1,7 +1,7 @@
 import pygame
 import math
 import random
-from config import *
+from .config import *
 from enum import Enum
 
 class AIState(Enum):
@@ -87,14 +87,29 @@ class AIController:
                 self.state = AIState.ATTACK
 
         if self.difficulty == Difficulty.EASY:
-            if random.random() < 0.3:
+            # Softer dithering than before: EASY should read as beatable, not
+            # randomly inert - mostly follow the real decision above.
+            if random.random() < 0.15:
                 self.state = AIState.IDLE
-            elif random.random() < 0.3:
+            elif random.random() < 0.15:
                 self.state = AIState.APPROACH
 
     def update(self, opponent, dt):
         if not self.top.is_launched or self.top.is_knocked_out:
             return None, None, None
+
+        if not opponent.is_launched:
+            # Opponent hasn't launched yet, so it isn't a real target (no
+            # collision applies to it either — see main.py). Drift gently
+            # toward center instead of "attacking"/dashing at a stationary
+            # point and burning spin for nothing.
+            self.state = AIState.IDLE
+            cdx = ARENA_CENTER[0] - self.top.x
+            cdy = ARENA_CENTER[1] - self.top.y
+            cdist = math.sqrt(cdx * cdx + cdy * cdy)
+            if cdist > 40:
+                return (cdx / cdist, cdy / cdist), False, False
+            return (0, 0), False, False
 
         self._decide(opponent, dt)
         self.state_timer += dt
@@ -131,17 +146,19 @@ class AIController:
         elif self.state == AIState.APPROACH:
             noise = random.uniform(-noise_level, noise_level)
             angle = opp_angle + noise
-            predict_mult = 1.0
-            if self.difficulty == Difficulty.HARD and dist > 100:
+            if self.difficulty in (Difficulty.MEDIUM, Difficulty.HARD) and dist > 100:
                 opp_speed = math.sqrt(opponent.vx ** 2 + opponent.vy ** 2)
                 if opp_speed > 50:
-                    predict_time = min(0.5, dist / max(1, opp_speed + 100))
+                    # MEDIUM leads the target too, just with a shorter, weaker
+                    # lookahead than HARD's full prediction.
+                    lead_scale = 1.0 if self.difficulty == Difficulty.HARD else 0.45
+                    predict_time = min(0.5, dist / max(1, opp_speed + 100)) * lead_scale
                     pred_x = opponent.x + opponent.vx * predict_time
                     pred_y = opponent.y + opponent.vy * predict_time
                     angle = math.atan2(pred_y - self.top.y, pred_x - self.top.x)
 
-            steer_x = math.cos(angle) * predict_mult
-            steer_y = math.sin(angle) * predict_mult
+            steer_x = math.cos(angle)
+            steer_y = math.sin(angle)
 
             if self.difficulty in (Difficulty.MEDIUM, Difficulty.HARD) and dist > 180 and self.top.dash_cooldown <= 0 and self.top.spin > self.top.max_spin * 0.4:
                 if random.random() < (0.04 if self.difficulty == Difficulty.HARD else 0.02):
