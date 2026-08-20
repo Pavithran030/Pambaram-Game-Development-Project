@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -13,9 +13,9 @@ print("=" * 60)
 print("UI RENDER TEST: All screens render in headless mode")
 print("=" * 60)
 
-from ui import Button, draw_menu, draw_top_select, draw_arena_select, draw_hud, draw_pause, draw_game_over, draw_countdown
-from config import TOP_PRESETS, ARENA_PRESETS, GameState, Difficulty, get_font
-from top import Top
+from pambaram.ui import Button, draw_menu, draw_top_select, draw_arena_select, draw_hud, draw_pause, draw_game_over, draw_countdown
+from pambaram.config import TOP_PRESETS, ARENA_PRESETS, GameState, Difficulty, get_font
+from pambaram.top import Top
 
 dummy_btns = [Button(100, 500, 200, 50, "Test")]
 

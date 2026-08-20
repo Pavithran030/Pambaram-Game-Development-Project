@@ -1,8 +1,8 @@
 import pygame
 import math
 import random
-from config import *
-from particles import ParticleSystem
+from .config import *
+from .particles import ParticleSystem
 
 class Arena:
     def __init__(self, preset_key="Gramam Thidal"):
@@ -211,7 +211,7 @@ def check_obstacle_collision(top, obstacles):
                 top.vy -= 2 * dot * ny
                 top.vx *= 0.6
                 top.vy *= 0.6
-                top.spin -= top.max_spin * 0.04
+                top.spin = max(0, top.spin - top.max_spin * 0.04)
                 total_shake += 5
     return total_shake
 

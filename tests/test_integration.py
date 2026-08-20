@@ -1,7 +1,7 @@
 import sys
 import os
 import math
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -14,8 +14,10 @@ print("=" * 60)
 print("INTEGRATION TEST: Game Manager Simulation")
 print("=" * 60)
 
-from config import TOP_PRESETS, ARENA_CENTER, ARENA_RADIUS, GameState, Difficulty
-from main import Game
+from pambaram.config import TOP_PRESETS, ARENA_CENTER, ARENA_RADIUS, ARENA_PRESETS, GameState, Difficulty
+from pambaram.main import Game
+from pambaram.arena import resolve_top_collision, check_obstacle_collision, check_boost_pad
+from pambaram.top import Top
 
 game = Game()
 print(f"Initial state: {game.state.name}")
@@ -91,14 +93,14 @@ for i in range(int(60 * 10)):
     if r1 == "bounce" or r2 == "bounce":
         bounce_happened += 1
 
-    col = __import__("arena").resolve_top_collision(game.p1, game.p2, game.particles)
+    col = resolve_top_collision(game.p1, game.p2, game.particles)
     if col > 0:
         collision_happened += 1
 
-    __import__("arena").check_obstacle_collision(game.p1, game.arena.obstacles)
-    __import__("arena").check_obstacle_collision(game.p2, game.arena.obstacles)
-    __import__("arena").check_boost_pad(game.p1, game.arena.boost_pads, game.particles)
-    __import__("arena").check_boost_pad(game.p2, game.arena.boost_pads, game.particles)
+    check_obstacle_collision(game.p1, game.arena.obstacles)
+    check_obstacle_collision(game.p2, game.arena.obstacles)
+    check_boost_pad(game.p1, game.arena.boost_pads, game.particles)
+    check_boost_pad(game.p2, game.arena.boost_pads, game.particles)
 
     game.arena.update(dt)
     game.particles.update(dt)
@@ -184,7 +186,7 @@ print("INTEGRATION TEST: Special Abilities End-to-End")
 print("=" * 60)
 for name in ["Thiruvalluvar", "Kottai Veeran", "Velu Vettaikaran", "Puyal Kaalai"]:
     preset = TOP_PRESETS[name]
-    t = __import__("top").Top(name, preset, 1)
+    t = Top(name, preset, 1)
     t.launch(0,0,0,1.0)
     t.special_meter = 100
     spin_before = t.spin
@@ -203,8 +205,8 @@ for key in game6.menu_buttons[3].text:
     pass
 assert len(TOP_PRESETS) == 8, "Should have 8 tops"
 print(f"  Tops available: {len(TOP_PRESETS)}")
-assert len(__import__("config").ARENA_PRESETS) == 4, "Should have 4 arenas"
-print(f"  Arenas available: {len(__import__('config').ARENA_PRESETS)}")
+assert len(ARENA_PRESETS) == 4, "Should have 4 arenas"
+print(f"  Arenas available: {len(ARENA_PRESETS)}")
 for n, p in TOP_PRESETS.items():
     for k in ["type", "mass", "spin_speed", "spin_decay", "grip", "color", "special"]:
         assert k in p, f"Top {n} missing key {k}"
