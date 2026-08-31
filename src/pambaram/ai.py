@@ -22,6 +22,18 @@ class AIController:
         self.wander_timer = 0
         self.last_decision = 0
         self.special_trigger = random.uniform(60, 100)
+        # Rolled once per decision tick (not every frame - see _decide) so the
+        # AI actually commits to a slightly-off heading for a while instead
+        # of re-sampling noise 60x/sec, which averages out to a near-perfect
+        # beeline and reads as "always follows the player exactly".
+        self.aim_noise = 0.0
+        # A genuine multi-second "back off and wander" period, rolled with
+        # some probability whenever the AI would otherwise engage. Without
+        # this the AI re-evaluates into APPROACH/ATTACK every single decision
+        # tick (as often as every 0.2s on HARD) and stays glued to the
+        # opponent, which is what was making matches collapse into constant
+        # contact and end almost immediately.
+        self.disengage_timer = 0.0
 
     def _dist_from_center(self):
         dx = self.top.x - ARENA_CENTER[0]
@@ -37,6 +49,11 @@ class AIController:
         return self._dist_from_center() > ARENA_RADIUS * 0.75
 
     def _decide(self, opponent, dt):
+        if self.disengage_timer > 0:
+            self.disengage_timer -= dt
+            self.state = AIState.IDLE
+            return
+
         self.last_decision -= dt
         self.last_decision = max(0, self.last_decision)
         if self.last_decision > 0:
@@ -48,6 +65,16 @@ class AIController:
             Difficulty.HARD: 0.2,
         }
         self.last_decision = decision_interval.get(self.difficulty, 0.5)
+
+        # Roll a fresh aim offset for this whole decision window. Held
+        # steady until the next tick, so movement visibly drifts/wanders
+        # instead of homing in on a razor-precise intercept course.
+        noise_level = {
+            Difficulty.EASY: 0.9,
+            Difficulty.MEDIUM: 0.5,
+            Difficulty.HARD: 0.22,
+        }.get(self.difficulty, 0.45)
+        self.aim_noise = random.uniform(-noise_level, noise_level)
 
         dist = self._dist_to(opponent)
         my_spin = self.top.spin / self.top.max_spin if self.top.max_spin > 0 else 0
@@ -86,13 +113,21 @@ class AIController:
             else:
                 self.state = AIState.ATTACK
 
-        if self.difficulty == Difficulty.EASY:
-            # Softer dithering than before: EASY should read as beatable, not
-            # randomly inert - mostly follow the real decision above.
-            if random.random() < 0.15:
+        if self.state in (AIState.APPROACH, AIState.ATTACK):
+            disengage_chance = {
+                Difficulty.EASY: 0.28,
+                Difficulty.MEDIUM: 0.18,
+                Difficulty.HARD: 0.12,
+            }.get(self.difficulty, 0.2)
+            if random.random() < disengage_chance:
+                # Back off and wander for a real stretch of time rather than
+                # just one decision tick, so contact doesn't stay constant.
+                self.disengage_timer = random.uniform(0.9, 2.2)
                 self.state = AIState.IDLE
-            elif random.random() < 0.15:
-                self.state = AIState.APPROACH
+        elif self.difficulty == Difficulty.EASY and random.random() < 0.15:
+            # EASY still gets its own lighter, single-tick dithering on top
+            # of the shared disengage above, so it reads as a bit less sharp.
+            self.state = AIState.APPROACH
 
     def update(self, opponent, dt):
         if not self.top.is_launched or self.top.is_knocked_out:
@@ -129,12 +164,6 @@ class AIController:
         center_dist = math.sqrt(center_dx ** 2 + center_dy ** 2)
         center_angle = math.atan2(center_dy, center_dx)
 
-        noise_level = {
-            Difficulty.EASY: 0.6,
-            Difficulty.MEDIUM: 0.25,
-            Difficulty.HARD: 0.08,
-        }[self.difficulty]
-
         if self.state == AIState.IDLE:
             self.wander_timer -= dt
             if self.wander_timer <= 0:
@@ -144,8 +173,7 @@ class AIController:
             steer_y = math.sin(self.target_angle)
 
         elif self.state == AIState.APPROACH:
-            noise = random.uniform(-noise_level, noise_level)
-            angle = opp_angle + noise
+            angle = opp_angle + self.aim_noise
             if self.difficulty in (Difficulty.MEDIUM, Difficulty.HARD) and dist > 100:
                 opp_speed = math.sqrt(opponent.vx ** 2 + opponent.vy ** 2)
                 if opp_speed > 50:
@@ -155,7 +183,7 @@ class AIController:
                     predict_time = min(0.5, dist / max(1, opp_speed + 100)) * lead_scale
                     pred_x = opponent.x + opponent.vx * predict_time
                     pred_y = opponent.y + opponent.vy * predict_time
-                    angle = math.atan2(pred_y - self.top.y, pred_x - self.top.x)
+                    angle = math.atan2(pred_y - self.top.y, pred_x - self.top.x) + self.aim_noise * 0.5
 
             steer_x = math.cos(angle)
             steer_y = math.sin(angle)
@@ -165,8 +193,7 @@ class AIController:
                     dash = True
 
         elif self.state == AIState.ATTACK:
-            noise = random.uniform(-noise_level * 0.5, noise_level * 0.5)
-            angle = opp_angle + noise
+            angle = opp_angle + self.aim_noise * 0.5
             steer_x = math.cos(angle)
             steer_y = math.sin(angle)
 
@@ -178,8 +205,7 @@ class AIController:
             retreat_angle = opp_angle + math.pi
             if self._near_edge():
                 retreat_angle = center_angle
-            noise = random.uniform(-noise_level, noise_level)
-            angle = retreat_angle + noise
+            angle = retreat_angle + self.aim_noise
             steer_x = math.cos(angle)
             steer_y = math.sin(angle)
 
@@ -188,10 +214,9 @@ class AIController:
 
         elif self.state == AIState.DEFEND:
             tangent = opp_angle + math.pi / 2
-            if random.random() < 0.5:
+            if self.aim_noise < 0:
                 tangent += math.pi
-            noise = random.uniform(-noise_level, noise_level)
-            angle = tangent + noise
+            angle = tangent + self.aim_noise
             steer_x = math.cos(angle) * 0.7
             steer_y = math.sin(angle) * 0.7
             if center_dist > ARENA_RADIUS * 0.5:

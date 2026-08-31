@@ -17,6 +17,20 @@ def draw_rounded_rect(surface, rect, color, radius=12, border=0, border_color=No
         pygame.draw.rect(surface, color, rect, border_radius=radius)
 
 
+def draw_text_outlined(surface, text, font, color, center, outline_color=(8, 8, 12), outline_w=2):
+    """Render text with a solid outline so it stays legible over busy,
+    non-panel backgrounds (e.g. text sitting directly on the arena floor)
+    regardless of what color/pattern is behind it."""
+    outline_surf = font.render(text, True, outline_color)
+    rect = outline_surf.get_rect(center=center)
+    for ox, oy in ((-outline_w, 0), (outline_w, 0), (0, -outline_w), (0, outline_w),
+                   (-outline_w, -outline_w), (outline_w, outline_w), (-outline_w, outline_w), (outline_w, -outline_w)):
+        surface.blit(outline_surf, rect.move(ox, oy))
+    ts = font.render(text, True, color)
+    surface.blit(ts, rect)
+    return rect
+
+
 def draw_panel(surface, rect, fill=None, border=None, radius=14, border_w=2):
     """Shared panel styling: optional fill, optional stroke. One call site
     instead of every screen hand-rolling two draw_rounded_rect calls."""
@@ -230,9 +244,9 @@ def draw_special_bar(surface, x, y, w, h, ratio, name="SPECIAL"):
     border = COLORS["special_ready"] if ready else COLORS["panel_border"]
     draw_rounded_rect(surface, bg_rect, border, h // 2, 2)
 
-    font = get_font(12, bold=True)
+    font = get_font(13, bold=True)
     label = f"{name}: READY" if ready else f"{name}: {int(ratio * 100)}%"
-    label_ts = font.render(label, True, COLORS["text_white"] if ready else COLORS["text_gray"])
+    label_ts = font.render(label, True, COLORS["special_ready"] if ready else COLORS["text_white"])
     surface.blit(label_ts, (x + 8, y + h + 2))
 
 

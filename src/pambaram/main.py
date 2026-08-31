@@ -613,12 +613,14 @@ class Game:
                     # they need to right-click-drag their own top.
                     if self.match_started:
                         hint_font = get_font(22, bold=True)
+                        # Outlined so it stays readable over the arena floor's
+                        # grid/texture regardless of what's directly behind it.
                         if not self.p1.is_launched:
-                            hint = hint_font.render("LEFT CLICK + DRAG on P1 Top to LAUNCH", True, COLORS["p1_color"])
-                            self.screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80)))
+                            draw_text_outlined(self.screen, "LEFT CLICK + DRAG on P1 Top to LAUNCH", hint_font,
+                                                COLORS["p1_color"], (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80))
                         if not self.p2_is_ai and not self.p2.is_launched:
-                            hint2 = hint_font.render("RIGHT CLICK + DRAG on P2 Top to LAUNCH", True, COLORS["p2_color"])
-                            self.screen.blit(hint2, hint2.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)))
+                            draw_text_outlined(self.screen, "RIGHT CLICK + DRAG on P2 Top to LAUNCH", hint_font,
+                                                COLORS["p2_color"], (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
 
                 if self.state == GameState.PLAYING:
                     self._update_gameplay(dt)
