@@ -1,4 +1,4 @@
-# Pambaram: Spinning Top Battle Arena
+# Pambaram: Spinning Top Battle Arena (Web Version – HTML/CSS/JS)
 
 A 2D physics-based spinning top battle game built with Python and Pygame,
 inspired by the traditional Tamil Pambaram (பம்பரம்) toy and games like Beyblade.

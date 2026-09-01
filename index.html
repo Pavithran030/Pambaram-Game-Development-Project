@@ -1,0 +1,149 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pambaram — Spinning Top Battle Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- MAIN MENU -->
+    <div id="screen-menu" class="screen active">
+      <div class="menu-bg"></div>
+      <div class="menu-center">
+        <div class="logo">
+          <span class="logo-main">PAMBARAM</span>
+          <span class="logo-sub">SPINNING TOP BATTLE ARENA</span>
+        </div>
+        <nav class="menu-nav">
+          <button class="btn btn-primary" id="mBtn-vsai">🤖 Player vs AI</button>
+          <button class="btn btn-secondary" id="mBtn-vsplayer">🎮 Player vs Player</button>
+          <button class="btn btn-ghost" id="mBtn-difficulty">⚙ AI Difficulty: <span id="diffLabel">Medium</span></button>
+        </nav>
+        <p class="controls-hint">
+          P1 — drag to launch · <kbd>WASD</kbd> steer · <kbd>Shift</kbd> dash · <kbd>Space</kbd> special<br/>
+          P2 — right-drag · <kbd>Arrow Keys</kbd> · <kbd>Ctrl</kbd> dash · <kbd>Enter</kbd> special · <kbd>Esc</kbd> pause<br/>
+          <span style="font-size:0.8rem;color:#aaa;">Mouse drag on empty space to pan · Scroll to zoom</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- TOP SELECTION -->
+    <div id="screen-topselect" class="screen">
+      <div class="screen-header">
+        <h2>Choose Your Top</h2>
+        <div class="player-indicators">
+          <span class="pi p1">P1: <span id="p1PickName">—</span></span>
+          <span class="pi p2" id="p2Label">P2/AI: <span id="p2PickName">—</span></span>
+        </div>
+      </div>
+      <div id="topGrid" class="card-grid"></div>
+      <div class="screen-footer">
+        <button class="btn btn-ghost" id="tsBack">← Back</button>
+        <span class="footer-hint">Left-click = P1 · Right-click = P2</span>
+        <button class="btn btn-primary" id="tsNext">Next →</button>
+      </div>
+    </div>
+
+    <!-- ARENA SELECTION -->
+    <div id="screen-arenaselect" class="screen">
+      <div class="screen-header"><h2>Choose Arena</h2></div>
+      <div id="arenaGrid" class="card-grid arena-grid"></div>
+      <div class="screen-footer">
+        <button class="btn btn-ghost" id="asBack">← Back</button>
+        <button class="btn btn-green" id="asStart">⚡ Start Match!</button>
+      </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="screen-hud" class="screen hud-overlay">
+      <div class="hud-panel p1-panel">
+        <div class="hud-top-name p1-name" id="hudP1Name">P1</div>
+        <div class="hud-type-badge" id="hudP1Type">Balance</div>
+        <div class="hud-bar-row">
+          <span class="hud-bar-label">SPIN</span>
+          <div class="hud-bar-track"><div id="barP1Spin" class="hud-bar-fill spin-bar" style="width:100%"></div></div>
+          <span id="pctP1Spin" class="hud-bar-pct">100%</span>
+        </div>
+        <div class="hud-bar-row">
+          <span class="hud-bar-label">SPEC</span>
+          <div class="hud-bar-track"><div id="barP1Special" class="hud-bar-fill special-bar" style="width:0%"></div></div>
+          <span id="pctP1Special" class="hud-bar-pct">0%</span>
+        </div>
+      </div>
+
+      <div class="hud-timer-panel">
+        <div id="hudTimer" class="hud-timer">03:00</div>
+        <div class="hud-timer-label">TIME</div>
+      </div>
+
+      <div class="hud-panel p2-panel">
+        <div class="hud-top-name p2-name" id="hudP2Name">P2</div>
+        <div class="hud-type-badge" id="hudP2Type">Attack</div>
+        <div class="hud-bar-row">
+          <span class="hud-bar-label">SPIN</span>
+          <div class="hud-bar-track"><div id="barP2Spin" class="hud-bar-fill spin-bar" style="width:100%"></div></div>
+          <span id="pctP2Spin" class="hud-bar-pct">100%</span>
+        </div>
+        <div class="hud-bar-row">
+          <span class="hud-bar-label">SPEC</span>
+          <div class="hud-bar-track"><div id="barP2Special" class="hud-bar-fill special-bar" style="width:0%"></div></div>
+          <span id="pctP2Special" class="hud-bar-pct">0%</span>
+        </div>
+      </div>
+
+      <div id="hudCountdown" class="hud-countdown hidden"></div>
+      <div id="hudLaunchHint" class="hud-launch-hint"></div>
+    </div>
+
+    <!-- PAUSE -->
+    <div id="screen-pause" class="screen modal-screen hidden">
+      <div class="modal-card">
+        <h2 class="modal-title">Paused</h2>
+        <div class="modal-btns">
+          <button class="btn btn-primary" id="pResume">▶ Resume</button>
+          <button class="btn btn-secondary" id="pRestart">↺ Restart</button>
+          <button class="btn btn-ghost" id="pMenu">🏠 Main Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div id="screen-gameover" class="screen modal-screen hidden">
+      <div class="modal-card go-card">
+        <div id="goTitle" class="go-title">Player 1 Wins!</div>
+        <div id="goTopName" class="go-top-name"></div>
+        <div id="goReason" class="go-reason"></div>
+        <div class="go-stats">
+          <div class="go-stat-row">
+            <span id="goP1Spin" class="go-stat p1-stat">—</span>
+            <span class="go-stat-vs">vs</span>
+            <span id="goP2Spin" class="go-stat p2-stat">—</span>
+          </div>
+          <div class="go-stat-row sub"><span>P1 Spin</span><span></span><span>P2 Spin</span></div>
+          <div id="goTime" class="go-meta"></div>
+          <div id="goScore" class="go-score"></div>
+        </div>
+        <div class="modal-btns row">
+          <button class="btn btn-primary" id="goRematch">↺ Rematch</button>
+          <button class="btn btn-ghost" id="goMenu">🏠 Menu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/top.js"></script>
+  <script src="js/arena.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
