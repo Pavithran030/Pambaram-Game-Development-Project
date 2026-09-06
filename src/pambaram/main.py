@@ -271,8 +271,9 @@ class Game:
         if dist > 8:
             dir_x = dx / max(1, dist)
             dir_y = dy / max(1, dist)
-            force = min(900, dist * 4.5 + 200)
-            spin_factor = min(1.0, 0.5 + dist / 400)
+            # Fixed launch: no variable power, always the same force and full spin.
+            force = 700.0
+            spin_factor = 1.0
             top.launch(dir_x, dir_y, force, spin_factor)
             self.particles.emit_dust(top.x, top.y, 20)
             self._apply_shake(3)
@@ -287,8 +288,8 @@ class Game:
     def _ai_auto_launch(self):
         if self.p2_is_ai and self.p2 and not self.p2.is_launched and self.match_started:
             angle = math.atan2(self.p1.y - self.p2.y, self.p1.x - self.p2.x) + random.uniform(-0.4, 0.4)
-            force = random.uniform(500, 900)
-            self.p2.launch(math.cos(angle), math.sin(angle), force, random.uniform(0.8, 1.0))
+            force = 700.0
+            self.p2.launch(math.cos(angle), math.sin(angle), force, 1.0)
             self.particles.emit_dust(self.p2.x, self.p2.y, 20)
             self.sound.play("launch")
 

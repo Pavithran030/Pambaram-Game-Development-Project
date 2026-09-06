@@ -522,8 +522,6 @@ def draw_launch_indicator(surface, top, is_player, drag_start, current_pos, shak
     dist = math.sqrt(dx * dx + dy * dy)
     if dist < 5:
         return
-    max_dist = 200
-    power = min(1.0, dist / max_dist)
     dir_x = dx / max(1, dist)
     dir_y = dy / max(1, dist)
 
@@ -538,18 +536,6 @@ def draw_launch_indicator(surface, top, is_player, drag_start, current_pos, shak
         ax = arrow_x - math.cos(angle + a_off) * 15
         ay = arrow_y - math.sin(angle + a_off) * 15
         pygame.draw.line(surface, col, (int(arrow_x), int(arrow_y)), (int(ax), int(ay)), 4)
-
-    bar_w = 180
-    bar_h = 16
-    bx = tx - bar_w // 2
-    by = ty - top.radius - 40
-    bar_rect = pygame.Rect(bx, by, bar_w, bar_h)
-    draw_rounded_rect(surface, bar_rect, (20, 15, 30), 8)
-    pcol = (80 + int(power * 175), 255 - int(power * 175), 80)
-    fill_rect = pygame.Rect(bx + 2, by + 2, max(4, int((bar_w - 4) * power)), bar_h - 4)
-    draw_rounded_rect(surface, fill_rect, pcol, 6)
-    pct = get_font(12, bold=True).render(f"LAUNCH {int(power * 100)}%", True, COLORS["text_white"])
-    surface.blit(pct, pct.get_rect(center=bar_rect.center))
 
 
 def draw_countdown(surface, count):

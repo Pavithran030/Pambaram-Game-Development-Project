@@ -8,6 +8,7 @@ ARENA_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
 ARENA_RADIUS = 280
 RINGOUT_RADIUS = 320
 MATCH_TIME = 180
+TOP_LIFETIME = 10.0  # seconds before a launched top automatically stops
 
 class GameState(Enum):
     MENU = 1
