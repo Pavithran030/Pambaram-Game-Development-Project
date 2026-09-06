@@ -62,6 +62,9 @@ class Top:
         self.steer_x = 0
         self.steer_y = 0
 
+        self.lifetime = TOP_LIFETIME  # seconds remaining before auto-stop
+        self.active = True
+
         self.trail_points = []
 
     def launch(self, direction_x, direction_y, force, initial_spin_factor=1.0):
@@ -70,6 +73,8 @@ class Top:
         self.spin = self.max_spin * initial_spin_factor
         self.vx = direction_x * force
         self.vy = direction_y * force
+        self.lifetime = TOP_LIFETIME
+        self.active = True
 
     def update(self, dt, arena_grip_mod=1.0):
         if self.is_knocked_out:
@@ -82,6 +87,18 @@ class Top:
                 self.spin -= self.spin_decay * 3 * dt
             return
 
+
+        # Auto-stop timer: if lifetime expires, the top stops spinning and moving.
+        self.lifetime -= dt
+        if self.lifetime <= 0 and self.active:
+            self.active = False
+            self.spin = 0
+            self.is_spinning = False
+            self.vx = 0
+            self.vy = 0
+            # Do not return immediately; allow one frame of zero state to be processed.
+            # The win condition will catch spin=0 on the next evaluation.
+            # Keep updating position (which is already zero velocity) and continue.
         if not self.is_launched:
             return
 
