@@ -8,7 +8,9 @@ ARENA_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
 ARENA_RADIUS = 280
 RINGOUT_RADIUS = 320
 MATCH_TIME = 180
-TOP_LIFETIME = 10.0  # seconds before a launched top automatically stops
+TOP_LIFETIME = 45.0  # length of a live battle; the clock only runs once BOTH tops
+                     # are launched (see Game.battle_live), then each top winds down
+                     # to a stop as it expires, guaranteeing a clean finish.
 
 class GameState(Enum):
     MENU = 1
@@ -59,6 +61,25 @@ COLORS = {
     "button_hover": (44, 49, 66),
     "button_active": (58, 65, 86),
     "shadow": (0, 0, 0, 120),
+
+    # --- Light / clean UI theme (menus, selection screens, HUD) ---
+    # Gameplay drawing (arena, tops) keeps its own warm palette; only the UI
+    # chrome uses these. p1_color/p2_color above are shared with the tops.
+    "bg_light": (236, 239, 244),      # main screen background (off-white)
+    "bg_light_alt": (224, 229, 237),  # faint banding behind the menu
+    "panel_white": (255, 255, 255),   # cards / panels
+    "panel_alt": (244, 246, 250),     # secondary panel fill
+    "panel_scrim": (250, 251, 253, 244),  # HUD panel fill (near-opaque white)
+    "text_dark": (24, 27, 34),        # primary text
+    "text_muted": (92, 100, 114),     # secondary text
+    "text_faint": (140, 148, 162),    # tertiary / hints
+    "border_soft": (198, 204, 214),   # crisp idle borders
+    "border_strong": (120, 128, 140), # dividers / stronger borders
+    "gold_dark": (188, 132, 16),      # gold that stays legible on white
+    "btn_idle": (255, 255, 255),
+    "btn_hover": (232, 238, 248),
+    "btn_active": (214, 224, 240),
+    "track_light": (222, 226, 233),   # empty meter track on a white panel
 }
 
 TOP_PRESETS = {

@@ -62,7 +62,8 @@ class Top:
         self.steer_x = 0
         self.steer_y = 0
 
-        self.lifetime = TOP_LIFETIME  # seconds remaining before auto-stop
+        self.lifetime = TOP_LIFETIME   # remaining battle time (see Game.battle_live)
+        self.lifetime_running = False  # only counts down once BOTH tops are launched
         self.active = True
 
         self.trail_points = []
@@ -88,19 +89,14 @@ class Top:
             return
 
 
-        # Auto-stop timer: if lifetime expires, the top stops spinning and moving.
-        self.lifetime -= dt
-        if self.lifetime <= 0 and self.active:
-            self.active = False
-            self.spin = 0
-            self.is_spinning = False
-            self.vx = 0
-            self.vy = 0
-            # Do not return immediately; allow one frame of zero state to be processed.
-            # The win condition will catch spin=0 on the next evaluation.
-            # Keep updating position (which is already zero velocity) and continue.
         if not self.is_launched:
             return
+
+        # Battle clock: only winds down once the fight is live (both tops launched;
+        # the game manager sets lifetime_running). It never ticks while a top is
+        # still sitting unlaunched on its pad.
+        if self.lifetime_running:
+            self.lifetime -= dt
 
         spin_ratio = self.spin / self.max_spin if self.max_spin > 0 else 0
 
@@ -126,6 +122,12 @@ class Top:
         decay_mod = 1.0
         if self.is_dashing:
             decay_mod *= 2.5
+        # When the battle clock runs out, wind the top down to a stop over ~1s
+        # rather than hard-cutting it. Whatever spin difference combat produced
+        # then decides the winner through the normal spin-out check, instead of
+        # both tops zeroing on the same frame into a flat draw.
+        if self.lifetime_running and self.lifetime <= 0:
+            decay_mod *= 12.0
         self.spin -= self.spin_decay * decay_mod * dt
         if self.spin <= 0:
             self.spin = 0

@@ -51,6 +51,8 @@ class Game:
         self.countdown = 3
         self.countdown_timer = 0
         self.match_started = False
+        self.battle_live = False
+        self.ai_launch_timer = 0.0
         self.pause_buttons = []
         self.gameover_buttons = []
         self._build_menu_buttons()
@@ -183,6 +185,8 @@ class Game:
         self.countdown = 3
         self.countdown_timer = 0
         self.match_started = False
+        self.battle_live = False
+        self.ai_launch_timer = 0.0
         self.screen_shake = (0, 0)
         self.shake_decay = 0
 
@@ -346,14 +350,34 @@ class Game:
             self.countdown -= 1
             if self.countdown < 0:
                 self.match_started = True
-                self._ai_auto_launch()
+                # The AI no longer auto-launches here; it launches reactively once
+                # the player launches P1 (see _update_gameplay), so both battle
+                # clocks start together.
 
     def _update_gameplay(self, dt):
         if not self.match_started:
             self._update_countdown(dt)
             return
 
-        self.match_time -= dt
+        # Reactive AI launch: the AI top launches ~0.35s after the player launches
+        # P1, so both battle clocks start together. Without this, the AI (which used
+        # to launch at the countdown) could already be spent by the time a player
+        # who dawdled finally launched -- ending the match the instant they engaged.
+        if self.p2_is_ai and self.p1.is_launched and not self.p2.is_launched:
+            self.ai_launch_timer += dt
+            if self.ai_launch_timer >= 0.35:
+                self._ai_auto_launch()
+
+        # The synced battle + match clocks start the moment BOTH tops are in play.
+        if not self.battle_live and self.p1.is_launched and self.p2.is_launched:
+            self.battle_live = True
+            self.p1.lifetime = TOP_LIFETIME
+            self.p2.lifetime = TOP_LIFETIME
+            self.p1.lifetime_running = True
+            self.p2.lifetime_running = True
+
+        if self.battle_live:
+            self.match_time -= dt
         keys = pygame.key.get_pressed()
 
         if self.p1.is_launched and not self.p1.is_knocked_out:
