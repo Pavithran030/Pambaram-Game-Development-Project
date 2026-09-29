@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════
+// ═══════════════════════════════════════
 //  PAMBARAM - top.js
 //  Top physics class (mirrors Python Top)
 // ═══════════════════════════════════════
@@ -108,8 +108,9 @@ class Top {
       this.mass = this.baseMass * 2.0;
       this.grip = this.baseGrip * 1.5;
     } else if (this.type === TopType.BALANCE) {
-      this.specialTimer = 0.5;
-      this.spin = Math.min(this.maxSpin, this.spin + this.maxSpin * 0.4);
+      // Balance special: temporarily slow spin decay (no free spin added)
+      this.specialTimer = 2.0;
+      this.spinDecay = this.baseSpinDecay * 0.2;
     } else if (this.type === TopType.SPEED) {
       this.specialTimer = 2.5;
       this.grip      = this.baseGrip * 0.5;
@@ -147,6 +148,9 @@ class Top {
     }
     if (!this.isLaunched) return;
 
+    // REST STATE: if launched but spin fully depleted, top is stationary — no physics
+    if (!this.isSpinning && this.spin <= 0) return;
+
     const spinRatio = this.maxSpin > 0 ? this.spin / this.maxSpin : 0;
 
     // Timers
@@ -167,7 +171,17 @@ class Top {
     // Spin decay
     const decayMod = this.isDashing ? 2.5 : 1.0;
     this.spin -= this.spinDecay * decayMod * dt;
-    if (this.spin <= 0) { this.spin = 0; this.isSpinning = false; }
+    if (this.spin <= 0) {
+      this.spin       = 0;
+      this.isSpinning = false;
+      // REST STATE: top fully stops — velocity zeroed, no more physics this frame
+      this.vx = 0;
+      this.vy = 0;
+      this.isDashing    = false;
+      this.specialActive= false;
+      this.invincible   = false;
+      return;
+    }
 
     // Wobble
     this.wobble = Math.max(0, (1.0 - spinRatio) * 15);

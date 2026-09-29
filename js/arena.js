@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════
+// ═══════════════════════════════════════
 //  PAMBARAM - arena.js
 // ═══════════════════════════════════════
 
@@ -275,11 +275,13 @@ function checkObstacleCollision(top, obstacles) {
 function checkBoostPad(top, pads, particles) {
   pads.forEach(pad => {
     if (pad.cooldown > 0) return;
+    // Only active if top is still spinning — can't boost a stopped top
+    if (!top.isSpinning) return;
     const dist = Math.hypot(top.x - pad.x, top.y - pad.y);
     if (dist < pad.r + top.radius) {
+      // Boost velocity only — spin is NOT restored by pads
       const spd = Math.hypot(top.vx, top.vy);
       if (spd > 0) { top.vx *= 1.5; top.vy *= 1.5; }
-      top.spin = Math.min(top.maxSpin, top.spin + top.maxSpin*0.1);
       pad.cooldown = 3.0;
       if (particles) particles.emitBoost(pad.x, pad.y);
     }
