@@ -37,9 +37,12 @@ class ParticleSystem:
         self.particles = []
 
     def update(self, dt):
-        self.particles = [p for p in self.particles if p.life > 0]
+        alive = []
         for p in self.particles:
             p.update(dt)
+            if p.life > 0:
+                alive.append(p)
+        self.particles = alive
 
     def draw(self, surface, shake=(0, 0)):
         for p in self.particles:
@@ -67,9 +70,9 @@ class ParticleSystem:
             vx = math.cos(angle) * speed
             vy = math.sin(angle) * speed
             c = (
-                min(255, base_color[0] + random.randint(-30, 30)),
-                min(255, base_color[1] + random.randint(-30, 30)),
-                min(255, base_color[2] + random.randint(-30, 30)),
+                max(0, min(255, base_color[0] + random.randint(-30, 30))),
+                max(0, min(255, base_color[1] + random.randint(-30, 30))),
+                max(0, min(255, base_color[2] + random.randint(-30, 30))),
             )
             self.particles.append(Particle(x, y, vx, vy, c, random.randint(2, 5), random.uniform(0.2, 0.6)))
 
@@ -89,9 +92,9 @@ class ParticleSystem:
             vx = math.cos(angle) * speed
             vy = math.sin(angle) * speed
             c = (
-                min(255, color[0] + random.randint(-40, 40)),
-                min(255, color[1] + random.randint(-40, 40)),
-                min(255, color[2] + random.randint(-40, 40)),
+                max(0, min(255, color[0] + random.randint(-40, 40))),
+                max(0, min(255, color[1] + random.randint(-40, 40))),
+                max(0, min(255, color[2] + random.randint(-40, 40))),
             )
             self.particles.append(Particle(x, y, vx, vy, c, random.randint(3, 8), random.uniform(0.4, 1.0)))
 

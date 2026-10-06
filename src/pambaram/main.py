@@ -16,7 +16,7 @@ class Game:
         try:
             pygame.mixer.init()
             self.sound_enabled = True
-        except:
+        except Exception:
             self.sound_enabled = False
 
         self.sound = SoundManager(self.sound_enabled)
@@ -68,7 +68,7 @@ class Game:
                 self.window = pygame.display.set_mode((0, 0), flags)
             else:
                 self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
-        except:
+        except Exception:
             self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
             self.fullscreen = False
         pygame.display.set_caption("Pambaram: Spinning Top Battle Arena")
@@ -420,6 +420,20 @@ class Game:
         self.p1.update(dt, grip_mod)
         self.p2.update(dt, grip_mod)
 
+        # Sustained Whirlwind: Speed-type specials continuously pull nearby
+        # enemies for the full duration, not just a one-shot burst at activation.
+        for puller, other in [(self.p1, self.p2), (self.p2, self.p1)]:
+            if (puller.special_active and puller.type == TopType.SPEED
+                    and puller.is_launched and not puller.is_knocked_out
+                    and other.is_launched and not other.is_knocked_out):
+                wdx = puller.x - other.x
+                wdy = puller.y - other.y
+                wdist = math.sqrt(wdx * wdx + wdy * wdy)
+                if 0 < wdist < 250:
+                    pull_strength = (250 - wdist) * 2.0 * dt
+                    other.vx += (wdx / wdist) * pull_strength
+                    other.vy += (wdy / wdist) * pull_strength
+
         # A top that hasn't launched yet is still sitting on its pad, not
         # "in play" — it must never participate in collisions/hazards/bounds,
         # otherwise it acts as an invisible immovable wall the moment the
@@ -443,6 +457,13 @@ class Game:
             self.sound.play("ringout")
         if shake2 == "bounce":
             self._apply_shake(4)
+            self.particles.emit_sparks(self.p2.x, self.p2.y,
+                                        (self.p2.x - ARENA_CENTER[0]) / max(1, math.sqrt(
+                                            (self.p2.x - ARENA_CENTER[0]) ** 2 + (
+                                                        self.p2.y - ARENA_CENTER[1]) ** 2)),
+                                        (self.p2.y - ARENA_CENTER[1]) / max(1, math.sqrt(
+                                            (self.p2.x - ARENA_CENTER[0]) ** 2 + (
+                                                        self.p2.y - ARENA_CENTER[1]) ** 2)), 8)
         if shake2 == "ringout":
             self.particles.emit_ringout(self.p2.x, self.p2.y, 40)
             self._apply_shake(10)

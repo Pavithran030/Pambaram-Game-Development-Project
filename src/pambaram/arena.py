@@ -125,12 +125,14 @@ def resolve_top_collision(t1, t2, particles):
 
     m1 = t1.mass
     m2 = t2.mass
-    e = 0.75
+    e = 0.85
 
     if t1.invincible:
         m1 *= 5
     if t2.invincible:
         m2 *= 5
+
+    approach_speed = abs(t1_dn - t2_dn)
 
     new_t1_dn = (t1_dn * (m1 - m2) + t2_dn * 2 * m2) / (m1 + m2) * e
     new_t2_dn = (t2_dn * (m2 - m1) + t1_dn * 2 * m1) / (m1 + m2) * e
@@ -143,16 +145,15 @@ def resolve_top_collision(t1, t2, particles):
     t1_spin_ratio = t1.spin / t1.max_spin if t1.max_spin > 0 else 0
     t2_spin_ratio = t2.spin / t2.max_spin if t2.max_spin > 0 else 0
 
-    t1_speed = math.sqrt(t1.vx ** 2 + t1.vy ** 2)
-    t2_speed = math.sqrt(t2.vx ** 2 + t2.vy ** 2)
-
-    mom1 = m1 * t1_speed * t1_spin_ratio
-    mom2 = m2 * t2_speed * t2_spin_ratio
-
     collide_x = (t1.x + t2.x) / 2
     collide_y = (t1.y + t2.y) / 2
 
-    impact = abs(mom1 - mom2) + (t1_speed + t2_speed) * 50
+    # Use pre-collision approach speed for impact — post-collision speed
+    # incorrectly rewards the collision loser with higher drain.
+    mom1 = m1 * approach_speed * t1_spin_ratio
+    mom2 = m2 * approach_speed * t2_spin_ratio
+
+    impact = abs(mom1 - mom2) + approach_speed * 100
 
     if mom1 > mom2:
         spin_loss = (mom1 - mom2) * 0.003
@@ -225,5 +226,9 @@ def check_boost_pad(top, pads, particles):
         dist = math.sqrt(dx * dx + dy * dy)
         if dist < pad["r"] + top.radius * 0.5:
             top.spin = min(top.max_spin, top.spin + top.max_spin * 0.25)
+            speed = math.sqrt(top.vx ** 2 + top.vy ** 2)
+            if speed > 10:
+                top.vx += (top.vx / speed) * 200
+                top.vy += (top.vy / speed) * 200
             particles.emit_special(pad["x"], pad["y"], (80, 255, 200), 20)
             pad["cooldown"] = 5.0

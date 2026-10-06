@@ -8,7 +8,7 @@ ARENA_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
 ARENA_RADIUS = 280
 RINGOUT_RADIUS = 320
 MATCH_TIME = 180
-TOP_LIFETIME = 45.0  # length of a live battle; the clock only runs once BOTH tops
+TOP_LIFETIME = 120.0  # length of a live battle; the clock only runs once BOTH tops
                      # are launched (see Game.battle_live), then each top winds down
                      # to a stop as it expires, guaranteeing a clean finish.
 
@@ -213,10 +213,17 @@ ARENA_PRESETS = {
 }
 
 pygame.font.init()
+_font_cache = {}
 def get_font(size, bold=False):
+    key = (size, bold)
+    if key in _font_cache:
+        return _font_cache[key]
     try:
         if bold:
-            return pygame.font.SysFont("arial, georgia, sans-serif", size, bold=True)
-        return pygame.font.SysFont("arial, georgia, sans-serif", size)
-    except:
-        return pygame.font.Font(None, size)
+            font = pygame.font.SysFont("arial, georgia, sans-serif", size, bold=True)
+        else:
+            font = pygame.font.SysFont("arial, georgia, sans-serif", size)
+    except Exception:
+        font = pygame.font.Font(None, size)
+    _font_cache[key] = font
+    return font

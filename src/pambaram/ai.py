@@ -22,6 +22,7 @@ class AIController:
         self.wander_timer = 0
         self.last_decision = 0
         self.special_trigger = random.uniform(60, 100)
+        self.defend_tangent_flip = False
 
     def _dist_from_center(self):
         dx = self.top.x - ARENA_CENTER[0]
@@ -65,6 +66,7 @@ class AIController:
         if self.top.type == TopType.DEFENSE:
             if dist < 120 and opp_spin > my_spin:
                 self.state = AIState.DEFEND
+                self.defend_tangent_flip = random.random() < 0.5
             elif dist > 200:
                 self.state = AIState.APPROACH
             else:
@@ -183,12 +185,13 @@ class AIController:
             steer_x = math.cos(angle)
             steer_y = math.sin(angle)
 
-            if self.top.dash_cooldown <= 0 and random.random() < 0.02:
-                dash = True
+            if self.top.dash_cooldown <= 0 and self._near_edge() and self.top.spin > self.top.max_spin * 0.15:
+                if random.random() < 0.05:
+                    dash = True
 
         elif self.state == AIState.DEFEND:
             tangent = opp_angle + math.pi / 2
-            if random.random() < 0.5:
+            if self.defend_tangent_flip:
                 tangent += math.pi
             noise = random.uniform(-noise_level, noise_level)
             angle = tangent + noise

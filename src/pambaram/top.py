@@ -128,7 +128,7 @@ class Top:
         # both tops zeroing on the same frame into a flat draw.
         if self.lifetime_running and self.lifetime <= 0:
             decay_mod *= 12.0
-        self.spin -= self.spin_decay * decay_mod * dt
+        self.spin -= self.spin_decay * decay_mod * arena_grip_mod * dt
         if self.spin <= 0:
             self.spin = 0
             self.is_spinning = False
