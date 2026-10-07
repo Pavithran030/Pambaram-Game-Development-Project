@@ -87,18 +87,6 @@ class Top:
                 self.spin -= self.spin_decay * 3 * dt
             return
 
-
-        # Auto-stop timer: if lifetime expires, the top stops spinning and moving.
-        self.lifetime -= dt
-        if self.lifetime <= 0 and self.active:
-            self.active = False
-            self.spin = 0
-            self.is_spinning = False
-            self.vx = 0
-            self.vy = 0
-            # Do not return immediately; allow one frame of zero state to be processed.
-            # The win condition will catch spin=0 on the next evaluation.
-            # Keep updating position (which is already zero velocity) and continue.
         if not self.is_launched:
             return
 
@@ -130,6 +118,11 @@ class Top:
         if self.spin <= 0:
             self.spin = 0
             self.is_spinning = False
+            self.vx *= 0.85
+            self.vy *= 0.85
+            if abs(self.vx) < 3 and abs(self.vy) < 3:
+                self.vx = 0
+                self.vy = 0
 
         self.wobble = max(0.0, (1.0 - spin_ratio) * 15)
         if spin_ratio < 0.2:
@@ -175,7 +168,6 @@ class Top:
 
         if self.is_spinning:
             self.rotation += (spin_ratio * 18) * dt
-            self.special_meter = min(100, self.special_meter + spin_ratio * 8 * dt)
 
         self.trail_points.append((self.x, self.y, self.spin / self.max_spin if self.max_spin > 0 else 0))
         if len(self.trail_points) > 20:
@@ -200,7 +192,6 @@ class Top:
         self.dash_timer = 0.25
         self.dash_cooldown = 1.5
         self.spin = max(0, self.spin - self.max_spin * 0.08)
-        self.special_meter = min(100, self.special_meter + 5)
         return True
 
     def activate_special(self, all_tops=None):
@@ -231,8 +222,9 @@ class Top:
             self.grip = self.base_grip * 1.5
 
         elif self.type == TopType.BALANCE:
-            self.special_timer = 0.5
-            self.spin = min(self.max_spin, self.spin + self.max_spin * 0.4)
+            self.special_timer = 3.0
+            self.grip = self.base_grip * 1.5
+            self.spin_decay = self.preset["spin_decay"] * 0.4
 
         elif self.type == TopType.SPEED:
             self.special_timer = 2.5
@@ -260,11 +252,6 @@ class Top:
         dx = self.x - ARENA_CENTER[0]
         dy = self.y - ARENA_CENTER[1]
         dist = math.sqrt(dx * dx + dy * dy)
-
-        # Recovery check: if top drifts back inside ringout threshold, cancel knockout state
-        if dist <= RINGOUT_RADIUS and self.is_knocked_out:
-            self.is_knocked_out = False
-            self.knockout_timer = 0
 
         if dist >= RINGOUT_RADIUS and not self.is_knocked_out:
             self.is_knocked_out = True
@@ -332,21 +319,7 @@ class Top:
         cx = px + int(wobble_dx)
         cy = py + int(wobble_dy)
 
-        if self.special_active:
-            if self.type == TopType.ATTACK:
-                for i in range(3):
-                    glow = 20 - i * 6
-                    pygame.draw.circle(surface, (255, 150 + i * 30, 50), (px, py), r + glow, 2)
-            elif self.type == TopType.DEFENSE:
-                pygame.draw.circle(surface, (100, 180, 255), (px, py), r + 15, 3)
-            elif self.type == TopType.SPEED:
-                for ang in range(0, 360, 30):
-                    rad = math.radians(ang + pygame.time.get_ticks() * 0.5)
-                    ex = px + math.cos(rad) * (r + 15)
-                    ey = py + math.sin(rad) * (r + 15)
-                    pygame.draw.line(surface, (255, 150, 255), (px, py), (int(ex), int(ey)), 2)
-
-        if self.invincible and not self.special_active:
+        if self.invincible:
             blink = (pygame.time.get_ticks() // 80) % 2 == 0
             if blink:
                 pygame.draw.circle(surface, (255, 255, 255), (px, py), r + 5, 2)

@@ -297,16 +297,6 @@ class Game:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.state = GameState.PAUSED
-            if event.key == pygame.K_SPACE and self.match_started and self.p1.is_launched:
-                if self.p1.activate_special([self.p1, self.p2]):
-                    self.particles.emit_special(self.p1.x, self.p1.y, self.p1.color, 30)
-                    self._apply_shake(5)
-                    self.sound.play("special")
-            if event.key == pygame.K_RETURN and self.match_started and not self.p2_is_ai and self.p2.is_launched:
-                if self.p2.activate_special([self.p1, self.p2]):
-                    self.particles.emit_special(self.p2.x, self.p2.y, self.p2.color, 30)
-                    self._apply_shake(5)
-                    self.sound.play("special")
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1 and not self.p1.is_launched and self.match_started:
@@ -356,6 +346,18 @@ class Game:
         self.match_time -= dt
         keys = pygame.key.get_pressed()
 
+        # Auto-launch safety: if P1 hasn't launched within 5 seconds of match start, launch toward center
+        if not self.p1.is_launched and (MATCH_TIME - self.match_time) >= 5.0:
+            self.p1.launch(0.6, -0.8, 700.0, 1.0)
+            self.particles.emit_dust(self.p1.x, self.p1.y, 20)
+            self.sound.play("launch")
+
+        # Auto-launch safety: if local P2 hasn't launched within 5 seconds of match start, launch toward center
+        if not self.p2_is_ai and not self.p2.is_launched and (MATCH_TIME - self.match_time) >= 5.0:
+            self.p2.launch(-0.6, -0.8, 700.0, 1.0)
+            self.particles.emit_dust(self.p2.x, self.p2.y, 20)
+            self.sound.play("launch")
+
         if self.p1.is_launched and not self.p1.is_knocked_out:
             sx, sy = 0, 0
             if keys[pygame.K_w] or keys[pygame.K_a] or keys[pygame.K_s] or keys[pygame.K_d]:
@@ -379,17 +381,12 @@ class Game:
         if self.ai_controller and self.p2.is_launched:
             result = self.ai_controller.update(self.p1, dt)
             if result and result[0] is not None:
-                steer, dash_do, special_do = result
+                steer, dash_do, _ = result
                 if self.p2.is_launched and not self.p2.is_knocked_out:
                     self.p2.steer(steer[0], steer[1])
                     if dash_do:
                         if self.p2.dash(steer[0], steer[1]):
                             self.sound.play("dash")
-                    if special_do:
-                        if self.p2.activate_special([self.p1, self.p2]):
-                            self.particles.emit_special(self.p2.x, self.p2.y, self.p2.color, 30)
-                            self._apply_shake(5)
-                            self.sound.play("special")
 
         grip_mod = self.arena.grip_mod
 
@@ -458,42 +455,49 @@ class Game:
         if not self.match_started:
             return
 
-        # Ring-out/spin-out only make sense once a top is actually in play,
-        # so those specific conditions still require both to have launched.
-        # Time-up must NOT require that, though -- otherwise a match where
-        # someone never launches (confused, AFK, stuck) can never end even
-        # when the clock hits zero, and just hangs forever.
         both_launched = self.p1.is_launched and self.p2.is_launched
 
-        p1_out = both_launched and self.p1.is_knocked_out and self.p1.knockout_timer > 1.5
-        p2_out = both_launched and self.p2.is_knocked_out and self.p2.knockout_timer > 1.5
+        p1_out = both_launched and self.p1.is_knocked_out and self.p1.knockout_timer >= 0.8
+        p2_out = both_launched and self.p2.is_knocked_out and self.p2.knockout_timer >= 0.8
         p1_dead = both_launched and not self.p1.is_spinning and self.p1.spin <= 0 and not self.p1.is_knocked_out
         p2_dead = both_launched and not self.p2.is_spinning and self.p2.spin <= 0 and not self.p2.is_knocked_out
 
         reason = ""
         win = None
+        game_over = False
 
         if p1_out and not p2_out:
             win = self.p2
             reason = f"RING OUT! {self.p1.name} was knocked out!"
+            game_over = True
         elif p2_out and not p1_out:
             win = self.p1
             reason = f"RING OUT! {self.p2.name} was knocked out!"
+            game_over = True
         elif p1_out and p2_out:
             r1 = self.p1.knockout_timer
             r2 = self.p2.knockout_timer
-            win = self.p1 if r1 < r2 else self.p2 if r2 < r1 else None
-            reason = "DOUBLE RING OUT!"
+            if abs(r1 - r2) < 0.2:
+                win = None
+                reason = "DOUBLE RING OUT! IT'S A DRAW!"
+            else:
+                win = self.p1 if r1 < r2 else self.p2
+                reason = f"DOUBLE RING OUT! {win.name} survived longer!"
+            game_over = True
         elif p1_dead and not p2_dead:
             win = self.p2
             reason = f"SPIN OUT! {self.p1.name} ran out of spin!"
+            game_over = True
         elif p2_dead and not p1_dead:
             win = self.p1
             reason = f"SPIN OUT! {self.p2.name} ran out of spin!"
+            game_over = True
         elif p1_dead and p2_dead:
             reason = "DOUBLE SPIN OUT! IT'S A DRAW!"
             win = None
+            game_over = True
         elif self.match_time <= 0:
+            game_over = True
             if not both_launched:
                 if self.p1.is_launched and not self.p2.is_launched:
                     win = self.p1
@@ -507,14 +511,16 @@ class Game:
             else:
                 s1 = self.p1.spin / self.p1.max_spin if self.p1.max_spin > 0 else 0
                 s2 = self.p2.spin / self.p2.max_spin if self.p2.max_spin > 0 else 0
-                if abs(s1 - s2) > 0.02:
+                pct1 = int(round(s1 * 100))
+                pct2 = int(round(s2 * 100))
+                if abs(pct1 - pct2) >= 1:
                     win = self.p1 if s1 > s2 else self.p2
-                    reason = f"TIME UP! {win.name} has more spin remaining!"
+                    reason = f"TIME UP! {win.name} has more spin remaining ({pct1}% vs {pct2}%)!"
                 else:
-                    reason = "TIME UP! EQUAL SPIN - IT'S A DRAW!"
+                    reason = f"TIME UP! EQUAL SPIN ({pct1}% vs {pct2}%) - IT'S A DRAW!"
                     win = None
 
-        if win is not None or self.match_time <= 0 or (p1_dead and p2_dead):
+        if game_over:
             self.winner = win
             elapsed = MATCH_TIME - max(0, self.match_time)
             
@@ -526,11 +532,20 @@ class Game:
                 ringout_bonus = 150 if "RING OUT" in reason else 100
                 base_points = int(200 + winning_spin_pct * 3 + time_bonus + ringout_bonus)
             
+            p1_max = self.p1.max_spin if self.p1.max_spin > 0 else 1.0
+            p2_max = self.p2.max_spin if self.p2.max_spin > 0 else 1.0
+            p1_pct = max(0.0, min(1.0, self.p1.spin / p1_max))
+            p2_pct = max(0.0, min(1.0, self.p2.spin / p2_max))
+
             self.stats = {
                 "win_reason": reason,
                 "match_time": elapsed,
                 "p1_final_spin": self.p1.spin,
                 "p2_final_spin": self.p2.spin,
+                "p1_max_spin": self.p1.max_spin,
+                "p2_max_spin": self.p2.max_spin,
+                "p1_spin_pct": p1_pct,
+                "p2_spin_pct": p2_pct,
                 "points": base_points,
             }
             self.state = GameState.GAME_OVER

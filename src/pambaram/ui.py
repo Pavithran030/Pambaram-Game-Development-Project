@@ -210,30 +210,8 @@ def draw_spin_bar(surface, x, y, w, h, ratio, label="SPIN", player_col=None):
 
 
 def draw_special_bar(surface, x, y, w, h, ratio, name="SPECIAL"):
-    ratio = max(0.0, min(1.0, ratio))
-    ready = ratio >= 1.0
-    bg_rect = pygame.Rect(x, y, w, h)
-
-    if ready:
-        draw_glow(surface, bg_rect, COLORS["special_ready"], pad=8, radius=h, alpha=45, layers=2)
-
-    draw_rounded_rect(surface, bg_rect, (14, 14, 22), h // 2)
-
-    fill_w = max(4, int((w - 4) * ratio))
-    fill_rect = pygame.Rect(x + 2, y + 2, fill_w, h - 4)
-    col = COLORS["special_ready"] if ready else (190, 145, 60)
-    if ready:
-        pulse = (math.sin(pygame.time.get_ticks() * 0.01) + 1) * 0.5
-        col = (min(255, int(col[0] + pulse * 35)), min(255, int(col[1] + pulse * 35)), col[2])
-    draw_rounded_rect(surface, fill_rect, col, (h - 4) // 2)
-
-    border = COLORS["special_ready"] if ready else COLORS["panel_border"]
-    draw_rounded_rect(surface, bg_rect, border, h // 2, 2)
-
-    font = get_font(12, bold=True)
-    label = f"{name}: READY" if ready else f"{name}: {int(ratio * 100)}%"
-    label_ts = font.render(label, True, COLORS["text_white"] if ready else COLORS["text_gray"])
-    surface.blit(label_ts, (x + 8, y + h + 2))
+    # Special ability system removed; keep function as no-op for backward compatibility
+    pass
 
 
 def _draw_hud_panel(surface, panel, top, hud_font, is_left):
@@ -253,15 +231,14 @@ def _draw_hud_panel(surface, panel, top, hud_font, is_left):
     surface.blit(type_ts, (panel.x + panel.width - type_ts.get_width() - 14, panel.y + 9))
 
     spin_ratio = top.spin / top.max_spin if top.max_spin > 0 else 0
-    draw_spin_bar(surface, panel.x + 15, panel.y + 32, panel.width - 30, 18, spin_ratio, "SPIN", player_col)
-    draw_special_bar(surface, panel.x + 15, panel.y + 76, panel.width - 30, 14, top.special_meter / 100, top.special_name)
+    draw_spin_bar(surface, panel.x + 15, panel.y + 30, panel.width - 30, 18, spin_ratio, "SPIN", player_col)
 
 
 def draw_hud(surface, p1, p2, match_time):
     hud_font_big = get_font(30, bold=True)
     hud_font = get_font(16, bold=True)
 
-    panel_w, panel_h = 320, 114
+    panel_w, panel_h = 320, 78
     left_panel = pygame.Rect(20, 15, panel_w, panel_h)
     right_panel = pygame.Rect(SCREEN_WIDTH - 20 - panel_w, 15, panel_w, panel_h)
 
@@ -304,7 +281,7 @@ def draw_menu(surface, buttons):
     for b in buttons:
         b.draw(surface)
 
-    tip = small_font.render("Controls:  WASD = Steer  |  SHIFT = Dash  |  SPACE = Special  |  ESC = Pause", True, COLORS["text_dim"])
+    tip = small_font.render("Controls:  WASD = Steer  |  SHIFT = Dash  |  ESC = Pause", True, COLORS["text_dim"])
     surface.blit(tip, tip.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 25)))
 
 
@@ -372,8 +349,11 @@ def draw_top_select(surface, tops_data, p1_selection, p2_selection, p2_ai, butto
             fill_rect = pygame.Rect(card_rect.x + 70, sy + 4, max(2, int(140 * max(0, min(1, sratio)))), 6)
             draw_rounded_rect(surface, fill_rect, COLORS["accent_gold"], 3)
 
-        spec_font = get_font(11, bold=True)
-        st = spec_font.render(preset["special"], True, COLORS["special_ready"])
+        desc_font = get_font(11)
+        desc_txt = preset.get("desc", "")
+        if len(desc_txt) > 34:
+            desc_txt = desc_txt[:32] + ".."
+        st = desc_font.render(desc_txt, True, COLORS["text_dim"])
         surface.blit(st, st.get_rect(center=(card_rect.centerx, card_rect.y + 218)))
 
         badge_y = card_rect.y + 8
@@ -480,21 +460,21 @@ def draw_game_over(surface, winner, stats, buttons):
     draw_panel(surface, panel, fill=COLORS["ui_panel"], border=COLORS["accent_gold"], radius=16, border_w=2)
 
     stat_font = get_font(22, bold=True)
-    label_font = get_font(18)
     p1_spin = stats.get("p1_final_spin", 0)
     p2_spin = stats.get("p2_final_spin", 0)
-    score_font = get_font(28, bold=True)
-    p1s = score_font.render(f"{int(p1_spin)}", True, COLORS["p1_color"])
-    p2s = score_font.render(f"{int(p2_spin)}", True, COLORS["p2_color"])
-    vs = stat_font.render("vs", True, COLORS["text_gray"])
-    surface.blit(p1s, (panel.x + 50, panel.y + 25))
-    surface.blit(vs, vs.get_rect(center=(panel.centerx, panel.y + 40)))
-    surface.blit(p2s, (panel.right - 50 - p2s.get_width(), panel.y + 25))
+    p1_max = stats.get("p1_max_spin", 1800) or 1800
+    p2_max = stats.get("p2_max_spin", 1800) or 1800
+    p1_pct = stats.get("p1_spin_pct", p1_spin / p1_max if p1_max > 0 else 0)
+    p2_pct = stats.get("p2_spin_pct", p2_spin / p2_max if p2_max > 0 else 0)
+    p1_pct = max(0.0, min(1.0, p1_pct))
+    p2_pct = max(0.0, min(1.0, p2_pct))
 
-    p1l = label_font.render("P1 Spin Remaining", True, COLORS["text_gray"])
-    p2l = label_font.render("P2 Spin Remaining", True, COLORS["text_gray"])
-    surface.blit(p1l, (panel.x + 50, panel.y + 65))
-    surface.blit(p2l, (panel.right - 50 - p2l.get_width(), panel.y + 65))
+    bar_w = 190
+    draw_spin_bar(surface, panel.x + 30, panel.y + 25, bar_w, 20, p1_pct, "P1 Spin", COLORS["p1_color"])
+    draw_spin_bar(surface, panel.right - bar_w - 30, panel.y + 25, bar_w, 20, p2_pct, "P2 Spin", COLORS["p2_color"])
+
+    vs = stat_font.render("vs", True, COLORS["text_gray"])
+    surface.blit(vs, vs.get_rect(center=(panel.centerx, panel.y + 35)))
 
     match_time = stats.get("match_time", 0)
     mins = int(match_time // 60)

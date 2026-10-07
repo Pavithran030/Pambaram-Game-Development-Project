@@ -224,6 +224,13 @@ def check_boost_pad(top, pads, particles):
         dy = top.y - pad["y"]
         dist = math.sqrt(dx * dx + dy * dy)
         if dist < pad["r"] + top.radius * 0.5:
-            top.spin = min(top.max_spin, top.spin + top.max_spin * 0.25)
+            # Velocity boost only - no spin increase
+            speed = math.hypot(top.vx, top.vy)
+            if speed > 0:
+                top.vx += (top.vx / speed) * 200
+                top.vy += (top.vy / speed) * 200
+            elif dist > 0:
+                top.vx += (dx / dist) * 200
+                top.vy += (dy / dist) * 200
             particles.emit_special(pad["x"], pad["y"], (80, 255, 200), 20)
             pad["cooldown"] = 5.0
