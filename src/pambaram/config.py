@@ -113,7 +113,7 @@ TOP_PRESETS = {
         "grip": 1.3,
         "color": (80, 180, 100),
         "accent": (200, 255, 200),
-        "special": "Spin Boost",
+        "special": "Gyro Balance",
         "desc": "Balanced stats for all situations",
     },
     "Puyal Kaalai": {
@@ -135,7 +135,7 @@ TOP_PRESETS = {
         "grip": 1.4,
         "color": (255, 140, 50),
         "accent": (255, 220, 150),
-        "special": "Spin Boost",
+        "special": "Gyro Balance",
         "desc": "Stable and reliable all-rounder",
     },
     "Sooravali": {

@@ -55,9 +55,6 @@ class AIController:
         opp_spin = opponent.spin / opponent.max_spin if opponent.max_spin > 0 else 0
         near_edge = self._near_edge()
 
-        if self.top.special_meter >= self.special_trigger and my_spin > 0.3:
-            self.state = AIState.SPECIAL
-            return
 
         if near_edge and my_spin < 0.4:
             self.state = AIState.RETREAT

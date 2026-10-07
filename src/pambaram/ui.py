@@ -253,15 +253,14 @@ def _draw_hud_panel(surface, panel, top, hud_font, is_left):
     surface.blit(type_ts, (panel.x + panel.width - type_ts.get_width() - 14, panel.y + 9))
 
     spin_ratio = top.spin / top.max_spin if top.max_spin > 0 else 0
-    draw_spin_bar(surface, panel.x + 15, panel.y + 32, panel.width - 30, 18, spin_ratio, "SPIN", player_col)
-    draw_special_bar(surface, panel.x + 15, panel.y + 76, panel.width - 30, 14, top.special_meter / 100, top.special_name)
+    draw_spin_bar(surface, panel.x + 15, panel.y + 30, panel.width - 30, 18, spin_ratio, "SPIN", player_col)
 
 
 def draw_hud(surface, p1, p2, match_time):
     hud_font_big = get_font(30, bold=True)
     hud_font = get_font(16, bold=True)
 
-    panel_w, panel_h = 320, 114
+    panel_w, panel_h = 320, 78
     left_panel = pygame.Rect(20, 15, panel_w, panel_h)
     right_panel = pygame.Rect(SCREEN_WIDTH - 20 - panel_w, 15, panel_w, panel_h)
 
@@ -486,7 +485,6 @@ def draw_game_over(surface, winner, stats, buttons):
     draw_panel(surface, panel, fill=COLORS["panel_scrim"], border=COLORS["gold_dark"], radius=16, border_w=3)
 
     stat_font = get_font(22, bold=True)
-    label_font = get_font(18)
     p1_spin = stats.get("p1_final_spin", 0)
     p2_spin = stats.get("p2_final_spin", 0)
     score_font = get_font(28, bold=True)
