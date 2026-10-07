@@ -16,7 +16,7 @@ class Game:
         try:
             pygame.mixer.init()
             self.sound_enabled = True
-        except:
+        except Exception:
             self.sound_enabled = False
 
         self.sound = SoundManager(self.sound_enabled)
@@ -51,6 +51,8 @@ class Game:
         self.countdown = 3
         self.countdown_timer = 0
         self.match_started = False
+        self.battle_live = False
+        self.ai_launch_timer = 0.0
         self.pause_buttons = []
         self.gameover_buttons = []
         self._build_menu_buttons()
@@ -66,7 +68,7 @@ class Game:
                 self.window = pygame.display.set_mode((0, 0), flags)
             else:
                 self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
-        except:
+        except Exception:
             self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
             self.fullscreen = False
         pygame.display.set_caption("Pambaram: Spinning Top Battle Arena")
@@ -183,6 +185,8 @@ class Game:
         self.countdown = 3
         self.countdown_timer = 0
         self.match_started = False
+        self.battle_live = False
+        self.ai_launch_timer = 0.0
         self.screen_shake = (0, 0)
         self.shake_decay = 0
 
@@ -336,14 +340,34 @@ class Game:
             self.countdown -= 1
             if self.countdown < 0:
                 self.match_started = True
-                self._ai_auto_launch()
+                # The AI no longer auto-launches here; it launches reactively once
+                # the player launches P1 (see _update_gameplay), so both battle
+                # clocks start together.
 
     def _update_gameplay(self, dt):
         if not self.match_started:
             self._update_countdown(dt)
             return
 
-        self.match_time -= dt
+        # Reactive AI launch: the AI top launches ~0.35s after the player launches
+        # P1, so both battle clocks start together. Without this, the AI (which used
+        # to launch at the countdown) could already be spent by the time a player
+        # who dawdled finally launched -- ending the match the instant they engaged.
+        if self.p2_is_ai and self.p1.is_launched and not self.p2.is_launched:
+            self.ai_launch_timer += dt
+            if self.ai_launch_timer >= 0.35:
+                self._ai_auto_launch()
+
+        # The synced battle + match clocks start the moment BOTH tops are in play.
+        if not self.battle_live and self.p1.is_launched and self.p2.is_launched:
+            self.battle_live = True
+            self.p1.lifetime = TOP_LIFETIME
+            self.p2.lifetime = TOP_LIFETIME
+            self.p1.lifetime_running = True
+            self.p2.lifetime_running = True
+
+        if self.battle_live:
+            self.match_time -= dt
         keys = pygame.key.get_pressed()
 
         # Auto-launch safety: if P1 hasn't launched within 5 seconds of match start, launch toward center
@@ -393,6 +417,20 @@ class Game:
         self.p1.update(dt, grip_mod)
         self.p2.update(dt, grip_mod)
 
+        # Sustained Whirlwind: Speed-type specials continuously pull nearby
+        # enemies for the full duration, not just a one-shot burst at activation.
+        for puller, other in [(self.p1, self.p2), (self.p2, self.p1)]:
+            if (puller.special_active and puller.type == TopType.SPEED
+                    and puller.is_launched and not puller.is_knocked_out
+                    and other.is_launched and not other.is_knocked_out):
+                wdx = puller.x - other.x
+                wdy = puller.y - other.y
+                wdist = math.sqrt(wdx * wdx + wdy * wdy)
+                if 0 < wdist < 250:
+                    pull_strength = (250 - wdist) * 2.0 * dt
+                    other.vx += (wdx / wdist) * pull_strength
+                    other.vy += (wdy / wdist) * pull_strength
+
         # A top that hasn't launched yet is still sitting on its pad, not
         # "in play" — it must never participate in collisions/hazards/bounds,
         # otherwise it acts as an invisible immovable wall the moment the
@@ -416,6 +454,13 @@ class Game:
             self.sound.play("ringout")
         if shake2 == "bounce":
             self._apply_shake(4)
+            self.particles.emit_sparks(self.p2.x, self.p2.y,
+                                        (self.p2.x - ARENA_CENTER[0]) / max(1, math.sqrt(
+                                            (self.p2.x - ARENA_CENTER[0]) ** 2 + (
+                                                        self.p2.y - ARENA_CENTER[1]) ** 2)),
+                                        (self.p2.y - ARENA_CENTER[1]) / max(1, math.sqrt(
+                                            (self.p2.x - ARENA_CENTER[0]) ** 2 + (
+                                                        self.p2.y - ARENA_CENTER[1]) ** 2)), 8)
         if shake2 == "ringout":
             self.particles.emit_ringout(self.p2.x, self.p2.y, 40)
             self._apply_shake(10)
