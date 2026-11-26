@@ -2,7 +2,7 @@ name: Deploy Pambaram Web (GitHub Pages)
 
 on:
   push:
-    branches: [ main, new-ui ]
+    branches: [ main, deployment ]
   workflow_dispatch:
 
 permissions:
