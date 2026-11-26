@@ -20,6 +20,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Method 3: Play or Deploy Online (Free)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete step-by-step instructions to run and deploy the game online for free via **GitHub Pages** (Pygbag WebAssembly), **itch.io**, **Cloudflare Pages**, or **Hugging Face Spaces**.
+
 ---
 
 ## System Requirements

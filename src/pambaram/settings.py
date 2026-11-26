@@ -37,6 +37,18 @@ DEFAULTS = {
 }
 
 
+_LS_KEY = "pambaram_settings_v1"
+
+
+def _is_web():
+    return sys.platform == "emscripten"
+
+
+def _local_storage():
+    import platform
+    return getattr(getattr(platform, "window", None), "localStorage", None)
+
+
 def persistence_enabled():
     return os.environ.get("PAMBARAM_NO_SAVE", "") not in ("1", "true", "yes")
 
@@ -89,6 +101,16 @@ def _validate(raw):
 def load():
     if not persistence_enabled():
         return _deepcopy(DEFAULTS)
+    if _is_web():
+        try:
+            ls = _local_storage()
+            if ls is not None:
+                raw = ls.getItem(_LS_KEY)
+                if raw:
+                    return _validate(json.loads(raw))
+        except Exception:
+            pass
+        return _deepcopy(DEFAULTS)
     try:
         with open(_settings_path(), "r", encoding="utf-8") as f:
             return _validate(json.load(f))
@@ -98,8 +120,18 @@ def load():
 
 def save(settings):
     """Atomic write (temp file + replace) so a crash mid-save can't corrupt
-    the file. Failures are ignored: losing a save must never crash the game."""
+    the file. In browser WASM builds, persists to window.localStorage.
+    Failures are ignored: losing a save must never crash the game."""
     if not persistence_enabled():
+        return False
+    if _is_web():
+        try:
+            ls = _local_storage()
+            if ls is not None:
+                ls.setItem(_LS_KEY, json.dumps(settings))
+                return True
+        except Exception:
+            pass
         return False
     try:
         folder = data_dir()

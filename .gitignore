@@ -48,7 +48,9 @@ htmlcov/
 
 # Pygame / Build outputs
 build/
+build_src/
 dist/
+*.apk
 *.spec
 *.egg-info/
 .eggs/

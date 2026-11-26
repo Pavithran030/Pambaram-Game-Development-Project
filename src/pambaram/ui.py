@@ -145,13 +145,90 @@ def draw_chip(surface, text, center, color, size=12, filled=False, pad_x=9, heig
     return rect
 
 
+_ARROW_GLYPH_CACHE = {}
+
+
+def _font_has_arrows(font):
+    """True when the font has distinct glyphs for ← and → instead of missing-glyph tofu boxes."""
+    key = id(font)
+    supported = _ARROW_GLYPH_CACHE.get(key)
+    if supported is None:
+        try:
+            tofu = pygame.image.tobytes(font.render("\u25a1", True, (255, 255, 255)), "RGBA")
+            left = pygame.image.tobytes(font.render("\u2190", True, (255, 255, 255)), "RGBA")
+            right = pygame.image.tobytes(font.render("\u2192", True, (255, 255, 255)), "RGBA")
+            supported = (left != tofu) and (right != tofu)
+        except Exception:
+            supported = False
+        _ARROW_GLYPH_CACHE[key] = supported
+    return supported
+
+
+def _split_arrow_tokens(text):
+    """Split a keycap label into text chunks and vector arrow tokens ('←' / '→')."""
+    tokens = []
+    buf = []
+    for ch in text:
+        if ch in ("←", "→"):
+            if buf:
+                tokens.append(("txt", "".join(buf)))
+                buf.clear()
+            tokens.append(("arrow", ch))
+        else:
+            buf.append(ch)
+    if buf:
+        tokens.append(("txt", "".join(buf)))
+    return tokens
+
+
+def _keycap_content_width(key_font, text, size):
+    if _font_has_arrows(key_font):
+        return key_font.size(text)[0]
+    arrow_w = max(8, size - 2)
+    total = 0
+    for kind, val in _split_arrow_tokens(text):
+        total += arrow_w if kind == "arrow" else key_font.size(val)[0]
+    return total
+
+
+def _draw_vector_arrow(surface, cx, cy, size, direction, color):
+    half = max(4, size // 2 - 2)
+    head = max(3, half - 1)
+    tip_x = cx - half if direction == "←" else cx + half
+    tail_x = cx + half if direction == "←" else cx - half
+    neck_x = tip_x + head if direction == "←" else tip_x - head
+    pygame.draw.line(surface, color, (tail_x, cy), (neck_x, cy), 2)
+    pygame.draw.polygon(
+        surface,
+        color,
+        [(tip_x, cy), (neck_x, cy - head + 1), (neck_x, cy + head - 1)],
+    )
+
+
+def _draw_keycap_label(surface, key_font, text, rect, size, color):
+    if _font_has_arrows(key_font):
+        draw_text(surface, text, key_font, color, rect.center)
+        return
+    arrow_w = max(8, size - 2)
+    content_w = _keycap_content_width(key_font, text, size)
+    x = rect.centerx - content_w // 2
+    for kind, val in _split_arrow_tokens(text):
+        if kind == "arrow":
+            _draw_vector_arrow(surface, x + arrow_w // 2, rect.centery, size, val, color)
+            x += arrow_w
+        else:
+            w = key_font.size(val)[0]
+            draw_text(surface, val, key_font, color, (x, rect.centery), anchor="midleft")
+            x += w
+
+
 def _measure_key_row(items, size):
     key_font = get_font(size - 1, family="semibold")
     txt_font = get_font(size, family="body")
     widths = []
     for kind, text in items:
         if kind == "key":
-            widths.append(key_font.size(text)[0] + 14)
+            widths.append(_keycap_content_width(key_font, text, size) + 14)
         else:
             widths.append(txt_font.size(text)[0])
     total = sum(widths) + 7 * (len(items) - 1)
@@ -176,7 +253,7 @@ def draw_key_row(surface, items, pos, anchor="center", size=14, text_color=None)
             draw_rounded_rect(surface, r.move(0, 2), (6, 7, 10), 6)
             draw_rounded_rect(surface, r, (38, 42, 56), 6)
             draw_rounded_rect(surface, r, (78, 85, 108), 6, 1)
-            draw_text(surface, text, key_font, COLORS["text_white"], r.center)
+            _draw_keycap_label(surface, key_font, text, r, size, COLORS["text_white"])
         elif kind == "accent":
             draw_text(surface, text, get_font(size, family="semibold"), COLORS["accent_gold"], (x, y),
                       anchor="midleft")

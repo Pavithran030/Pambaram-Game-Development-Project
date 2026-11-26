@@ -1,3 +1,4 @@
+import asyncio
 import os
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
@@ -15,6 +16,10 @@ from .arena import Arena, resolve_top_collision, check_obstacle_collision, check
 from .ai import AIController
 from .ui import *
 from .sound import SoundManager
+
+
+def _is_web():
+    return sys.platform == "emscripten"
 
 
 def _enable_dpi_awareness():
@@ -41,9 +46,15 @@ DEFAULT_AIM = {1: -0.35, 2: math.pi - 0.35}
 class Game:
     def __init__(self):
         _enable_dpi_awareness()
-        pygame.init()
+        if not pygame.get_init():
+            try:
+                pygame.mixer.pre_init(44100, -16, 2, 512)
+            except Exception:
+                pass
+            pygame.init()
         try:
-            pygame.mixer.init()
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(44100, -16, 2, 512)
             self.sound_enabled = True
         except Exception:
             self.sound_enabled = False
@@ -107,6 +118,12 @@ class Game:
     # Display
     # ------------------------------------------------------------------
     def _init_display(self):
+        if _is_web():
+            self.window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+            self.fullscreen = False
+            pygame.display.set_caption("Pambaram: Spinning Top Battle Arena")
+            self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            return
         flags = pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE
         try:
             if self.fullscreen:
@@ -124,6 +141,9 @@ class Game:
         self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
     def _toggle_fullscreen(self):
+        if _is_web():
+            self._toast("USE BROWSER FULLSCREEN (F11)")
+            return
         self.fullscreen = not self.fullscreen
         self._init_display()
         self._save_settings()
@@ -370,6 +390,10 @@ class Game:
         self.state = GameState.PLAYING
 
     def _quit(self):
+        if _is_web():
+            self._save_settings()
+            self._toast("CLOSE TAB TO EXIT")
+            return
         self._save_settings()
         self.running = False
 
@@ -928,7 +952,7 @@ class Game:
         if handler:
             handler(event)
 
-    def run(self):
+    async def run(self):
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
             dt = min(dt, 0.05)
@@ -951,9 +975,11 @@ class Game:
                 self.toast_timer = max(0.0, self.toast_timer - dt)
 
             self._draw()
+            await asyncio.sleep(0)
 
         pygame.quit()
-        sys.exit(0)
+        if not _is_web():
+            sys.exit(0)
 
 
 def _show_crash_dialog(message):
@@ -966,10 +992,10 @@ def _show_crash_dialog(message):
         pass
 
 
-def main():
+async def main():
     try:
         game = Game()
-        game.run()
+        await game.run()
     except SystemExit:
         raise
     except KeyboardInterrupt:
@@ -984,8 +1010,9 @@ def main():
             msg += f"\n\nDetails were saved to:\n{log_path}"
         print(msg, file=sys.stderr)
         _show_crash_dialog(msg)
-        sys.exit(1)
+        if not _is_web():
+            sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

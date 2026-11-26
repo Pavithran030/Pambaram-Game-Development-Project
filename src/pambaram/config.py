@@ -1,4 +1,5 @@
 import pygame
+import pygame.font
 from enum import Enum
 
 SCREEN_WIDTH = 1200
@@ -241,9 +242,9 @@ TYPE_COLORS = {
 # text; "semibold" for small labels that must stay readable. Each family
 # falls back to Arial and then pygame's built-in font on other systems.
 FONT_FAMILIES = {
-    "display": ("bahnschrift", "segoeuisemibold", "arial"),
-    "body": ("segoeui", "calibri", "arial"),
-    "semibold": ("segoeuisemibold", "segoeui", "arial"),
+    "display": ("bahnschrift", "segoeuisemibold", "dejavusans", "liberationsans", "arial"),
+    "body": ("segoeui", "calibri", "dejavusans", "liberationsans", "arial"),
+    "semibold": ("segoeuisemibold", "segoeui", "dejavusans", "liberationsans", "arial"),
 }
 
 pygame.font.init()
