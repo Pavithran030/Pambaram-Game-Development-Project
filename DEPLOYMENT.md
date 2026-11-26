@@ -15,7 +15,7 @@ By packaging the game with **Pygbag** (Python + `pygame-ce` compiled to WebAssem
 
 ---
 
-## Deployment Updates Included in This Branch (`new-ui`)
+## Deployment Updates Included in This Branch (`deployment`)
 
 1. **Async Game Loop ([`main.py`](main.py), [`src/pambaram/main.py`](src/pambaram/main.py)):**
    - Converted `Game.run()` and `main()` to `async def` yielding `await asyncio.sleep(0)` every frame so the browser tab stays responsive.
@@ -61,15 +61,17 @@ By packaging the game with **Pygbag** (Python + `pygame-ce` compiled to WebAssem
 This repository already includes [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml). For public GitHub repositories, **GitHub Actions minutes** and **GitHub Pages** (`1 GB` site size, `100 GB/month` soft bandwidth) are **100% free** (non-commercial use).
 
 ### Steps:
-1. **Push this branch** to GitHub (or merge `new-ui` into `main`):
+1. **Push this branch** to GitHub (or merge `deployment` into `main`):
    ```bash
    git add .
    git commit -m "Add Pygbag web deployment support, CI workflows, and DEPLOYMENT.md"
-   git push origin new-ui
+   git push origin deployment
    ```
-2. On GitHub, open your repository -> **Settings** -> **Pages**.
-3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-4. Open the **Actions** tab and confirm **Deploy Pambaram Web (GitHub Pages)** succeeds.
+2. On GitHub, open your repository -> **Settings** -> **Pages**:
+   - Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. On GitHub, open **Settings** -> **Environments** -> **`github-pages`** *(required when deploying from the `deployment` branch, because GitHub restricts `github-pages` to `main` by default)*:
+   - Under **Deployment branches and tags**, click **Add deployment branch or tag rule** and add **`deployment`** (or change the dropdown to **All branches**), then click **Save protection rules**.
+4. Open the **Actions** tab, open the failed run (or re-run failed jobs), and confirm **Deploy Pambaram Web (GitHub Pages)** succeeds.
    - The workflow automatically runs the headless tests (`test_ui.py`, `test_integration.py`, `test_match_flow.py`, `test_production.py`, `test_web_deploy.py`), stages `build_src/pambaram/`, builds WASM with Pygbag, and publishes `build_src/pambaram/build/web/`.
 5. Play your live game at:
    ```text
@@ -107,7 +109,7 @@ Cloudflare Pages provides **unlimited static bandwidth** and allows commercial p
 
 ### Option A — Git Integration (Automatic):
 1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com/) -> **Workers & Pages** -> **Create** -> **Pages** -> **Connect to Git**.
-2. Select your GitHub repository and branch (`main` or `new-ui`).
+2. Select your GitHub repository and branch (`main` or `deployment`).
 3. Configure build settings:
    - **Build command:**
      ```bash
