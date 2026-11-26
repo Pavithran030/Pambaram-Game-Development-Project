@@ -1,8 +1,7 @@
 import pygame
+import pygame.gfxdraw
 import math
-import random
 from .config import *
-from .particles import ParticleSystem
 
 class Arena:
     def __init__(self, preset_key="Gramam Thidal"):
@@ -37,31 +36,47 @@ class Arena:
             if pad["cooldown"] > 0:
                 pad["cooldown"] -= dt
 
-    def draw(self, surface, shake=(0, 0)):
-        sx, sy = shake
-        cx = ARENA_CENTER[0] + sx
-        cy = ARENA_CENTER[1] + sy
+    # ------------------------------------------------------------------
+    # Rendering
+    # ------------------------------------------------------------------
+    def _build_static_layer(self):
+        """Everything that never moves, rendered once. Rebuilding the void,
+        floor and grid every frame used to cost ~15 ms - most of the frame."""
+        layer = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        layer.fill(self.void_color)
+        cx, cy = ARENA_CENTER
 
-        void_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.circle(void_surf, (0, 0, 0, 0), (cx, cy), RINGOUT_RADIUS + 60)
-        void_surf.fill((self.void_color[0], self.void_color[1], self.void_color[2], 255), None, pygame.BLEND_RGBA_MAX)
-        surface.blit(void_surf, (0, 0))
-
+        # Outer rim: stepped shading for depth.
         for r_offset in range(30, 0, -6):
             shade = tuple(min(255, max(0, c - r_offset)) for c in self.ring_color)
-            pygame.draw.circle(surface, shade, (cx, cy), ARENA_RADIUS + r_offset)
-        pygame.draw.circle(surface, self.ring_color, (cx, cy), ARENA_RADIUS, 4)
+            pygame.draw.circle(layer, shade, (cx, cy), ARENA_RADIUS + r_offset)
 
-        arena_surf = pygame.Surface((ARENA_RADIUS * 2 + 10, ARENA_RADIUS * 2 + 10), pygame.SRCALPHA)
-        pygame.draw.circle(arena_surf, self.floor_color + (255,), (ARENA_RADIUS + 5, ARENA_RADIUS + 5), ARENA_RADIUS)
-        for i in range(0, ARENA_RADIUS * 2, 40):
-            alpha_line = 20
-            pygame.draw.line(arena_surf, (0, 0, 0, alpha_line), (i, 0), (i, ARENA_RADIUS * 2 + 10), 1)
-            pygame.draw.line(arena_surf, (0, 0, 0, alpha_line), (0, i), (ARENA_RADIUS * 2 + 10, i), 1)
-        surface.blit(arena_surf, (cx - ARENA_RADIUS - 5, cy - ARENA_RADIUS - 5))
+        # Floor: shaded like a shallow bowl (darker toward the rim).
+        R = ARENA_RADIUS
+        floor = pygame.Surface((R * 2, R * 2), pygame.SRCALPHA)
+        rim_col = tuple(max(0, int(c * 0.80)) for c in self.floor_color)
+        mid_col = tuple(min(255, int(c + (255 - c) * 0.06)) for c in self.floor_color)
+        steps = 14
+        for i in range(steps, 0, -1):
+            t = i / steps
+            col = tuple(int(mid_col[k] + (rim_col[k] - mid_col[k]) * t ** 2) for k in range(3))
+            pygame.draw.circle(floor, col, (R, R), int(R * t))
 
-        for ring_r in [50, 100, 150, 200, 250]:
-            pygame.draw.circle(surface, tuple(min(255, max(0, c - 40)) for c in self.floor_color), (cx, cy), ring_r, 1)
+        # Grid: exact chords clipped to the circle, blended on top.
+        grid = pygame.Surface((R * 2, R * 2), pygame.SRCALPHA)
+        for off in range(-R + 40, R, 40):
+            half = int(math.sqrt(max(0, R * R - off * off)))
+            pygame.draw.line(grid, (0, 0, 0, 26), (R + off, R - half), (R + off, R + half), 1)
+            pygame.draw.line(grid, (0, 0, 0, 26), (R - half, R + off), (R + half, R + off), 1)
+        floor.blit(grid, (0, 0))
+        layer.blit(floor, (cx - R, cy - R))
+
+        line_col = tuple(min(255, max(0, c - 40)) for c in self.floor_color)
+        for ring_r in (50, 100, 150, 200, 250):
+            pygame.gfxdraw.aacircle(layer, cx, cy, ring_r, line_col)
+        pygame.draw.circle(layer, self.ring_color, (cx, cy), ARENA_RADIUS, 4)
+        for rr in (ARENA_RADIUS, ARENA_RADIUS - 4):
+            pygame.gfxdraw.aacircle(layer, cx, cy, rr, self.ring_color)
 
         for angle in range(0, 360, 45):
             rad = math.radians(angle)
@@ -69,28 +84,47 @@ class Arena:
             y1 = cy + math.sin(rad) * (ARENA_RADIUS - 30)
             x2 = cx + math.cos(rad) * (ARENA_RADIUS - 5)
             y2 = cy + math.sin(rad) * (ARENA_RADIUS - 5)
-            pygame.draw.line(surface, self.ring_color, (x1, y1), (x2, y2), 2)
+            pygame.draw.line(layer, self.ring_color, (x1, y1), (x2, y2), 2)
 
+        # Stone pillars: shadow, body, lit top face, crack detail.
         for obs in self.obstacles:
-            ox = obs["x"] + sx
-            oy = obs["y"] + sy
-            pygame.draw.circle(surface, (100, 80, 60), (ox, oy), obs["r"] + 3)
-            pygame.draw.circle(surface, (150, 130, 100), (ox, oy), obs["r"])
-            pygame.draw.circle(surface, (80, 60, 40), (ox, oy), obs["r"], 2)
+            ox, oy, r = int(obs["x"]), int(obs["y"]), obs["r"]
+            sh = pygame.Surface((r * 2 + 12, r * 2 + 12), pygame.SRCALPHA)
+            pygame.draw.circle(sh, (0, 0, 0, 90), (r + 6, r + 6), r + 2)
+            layer.blit(sh, (ox - r - 6 + 5, oy - r - 6 + 6))
+            pygame.gfxdraw.filled_circle(layer, ox, oy, r + 3, (92, 74, 56))
+            pygame.gfxdraw.aacircle(layer, ox, oy, r + 3, (70, 54, 40))
+            pygame.gfxdraw.filled_circle(layer, ox, oy, r, (156, 136, 106))
+            pygame.gfxdraw.filled_circle(layer, ox - 4, oy - 4, int(r * 0.62), (176, 158, 126))
+            pygame.gfxdraw.aacircle(layer, ox, oy, r, (110, 90, 66))
+            pygame.draw.line(layer, (118, 98, 74), (ox - r // 3, oy + r // 4), (ox + r // 5, oy - r // 6), 2)
+
+        # Centre mark.
+        pygame.gfxdraw.aacircle(layer, cx, cy, 6, line_col)
+        pygame.gfxdraw.filled_circle(layer, cx, cy, 2, line_col)
+        return layer
+
+    def draw(self, surface, shake=(0, 0)):
+        if getattr(self, "_static", None) is None:
+            self._static = self._build_static_layer()
+        sx, sy = int(round(shake[0])), int(round(shake[1]))
+        if sx or sy:
+            surface.fill(self.void_color)
+        surface.blit(self._static, (sx, sy))
 
         for pad in self.boost_pads:
-            px = pad["x"] + sx
-            py = pad["y"] + sy
+            px = int(pad["x"] + sx)
+            py = int(pad["y"] + sy)
             active = pad["cooldown"] <= 0
             color = (80, 255, 200) if active else (80, 100, 100)
             if active:
                 pulse = math.sin(pygame.time.get_ticks() * 0.008) * 4
-                pygame.draw.circle(surface, color, (px, py), pad["r"] + pulse, 2)
-            pygame.draw.circle(surface, color, (px, py), pad["r"], 1)
+                pygame.gfxdraw.aacircle(surface, px, py, int(pad["r"] + pulse), color)
+                pygame.gfxdraw.aacircle(surface, px, py, int(pad["r"] + pulse) - 1, color)
+            pygame.gfxdraw.aacircle(surface, px, py, pad["r"], color)
             inner_c = tuple(min(255, c + 80) for c in color)
-            pygame.draw.circle(surface, inner_c, (px, py), int(pad["r"] * 0.5))
-
-        pygame.draw.circle(surface, (255, 215, 0), (cx, cy), 4)
+            pygame.gfxdraw.filled_circle(surface, px, py, int(pad["r"] * 0.5), inner_c)
+            pygame.gfxdraw.aacircle(surface, px, py, int(pad["r"] * 0.5), inner_c)
 
 
 def resolve_top_collision(t1, t2, particles):
@@ -115,81 +149,84 @@ def resolve_top_collision(t1, t2, particles):
     t2.x += nx * overlap * w2
     t2.y += ny * overlap * w2
 
-    tx = -ny
-    ty = nx
+    # Closing speed along the contact normal. If the tops are already moving
+    # apart, the overlap fix above is all that's needed - applying the
+    # impulse again would yank them back together, and every frame of
+    # contact would replay the sound, sparks and spin damage.
+    closing = (t1.vx - t2.vx) * nx + (t1.vy - t2.vy) * ny
+    if closing <= 0:
+        return 0
 
-    t1_dn = t1.vx * nx + t1.vy * ny
-    t1_dt = t1.vx * tx + t1.vy * ty
-    t2_dn = t2.vx * nx + t2.vy * ny
-    t2_dt = t2.vx * tx + t2.vy * ty
+    # How much each top is driving INTO the contact (before the bounce).
+    # The aggressor - the one actually ramming - wins more of the clash.
+    drive1 = max(0.0, t1.vx * nx + t1.vy * ny)
+    drive2 = max(0.0, -(t2.vx * nx + t2.vy * ny))
 
-    m1 = t1.mass
-    m2 = t2.mass
-    e = 0.75
+    m1 = t1.mass * (5 if t1.invincible else 1)
+    m2 = t2.mass * (5 if t2.invincible else 1)
+    e = COLLISION_RESTITUTION
 
-    if t1.invincible:
-        m1 *= 5
-    if t2.invincible:
-        m2 *= 5
+    # Standard impulse along the normal (tangential velocity is kept).
+    j = (1 + e) * closing / (1 / m1 + 1 / m2)
+    t1.vx -= (j / m1) * nx
+    t1.vy -= (j / m1) * ny
+    t2.vx += (j / m2) * nx
+    t2.vy += (j / m2) * ny
 
-    new_t1_dn = (t1_dn * (m1 - m2) + t2_dn * 2 * m2) / (m1 + m2) * e
-    new_t2_dn = (t2_dn * (m2 - m1) + t1_dn * 2 * m1) / (m1 + m2) * e
+    # Gentle pushing contact (tops grinding while steering into each other)
+    # just bounces - no spin damage, sparks, shake or sound every frame.
+    if closing < MIN_IMPACT_SPEED:
+        return 0
 
-    t1.vx = tx * t1_dt + nx * new_t1_dn
-    t1.vy = ty * t1_dt + ny * new_t1_dn
-    t2.vx = tx * t2_dt + nx * new_t2_dn
-    t2.vy = ty * t2_dt + ny * new_t2_dn
+    # Who wins the clash: heavier and faster-spinning tops hit harder.
+    # Attack types deal more, Defense types take less.
+    r1 = t1.spin / t1.max_spin if t1.max_spin > 0 else 0
+    r2 = t2.spin / t2.max_spin if t2.max_spin > 0 else 0
+    power1 = m1 * (0.4 + 0.6 * r1) * (1.25 if t1.type == TopType.ATTACK else 1.0)
+    power2 = m2 * (0.4 + 0.6 * r2) * (1.25 if t2.type == TopType.ATTACK else 1.0)
+    power1 *= 1.0 + ATTACKER_BONUS * drive1 / closing
+    power2 *= 1.0 + ATTACKER_BONUS * drive2 / closing
+    total_power = max(0.001, power1 + power2)
+    share1 = power1 / total_power   # fraction of the clash won by t1
+    share2 = power2 / total_power
 
-    t1_spin_ratio = t1.spin / t1.max_spin if t1.max_spin > 0 else 0
-    t2_spin_ratio = t2.spin / t2.max_spin if t2.max_spin > 0 else 0
+    base_damage = closing * COLLISION_SPIN_DAMAGE
+    dmg_to_2 = base_damage * share1 * 2 * (0.75 if t2.type == TopType.DEFENSE else 1.0)
+    dmg_to_1 = base_damage * share2 * 2 * (0.75 if t1.type == TopType.DEFENSE else 1.0)
+    if not t1.invincible:
+        t1.spin = max(0, t1.spin - dmg_to_1)
+    if not t2.invincible:
+        t2.spin = max(0, t2.spin - dmg_to_2)
 
-    t1_speed = math.sqrt(t1.vx ** 2 + t1.vy ** 2)
-    t2_speed = math.sqrt(t2.vx ** 2 + t2.vy ** 2)
-
-    mom1 = m1 * t1_speed * t1_spin_ratio
-    mom2 = m2 * t2_speed * t2_spin_ratio
-
-    collide_x = (t1.x + t2.x) / 2
-    collide_y = (t1.y + t2.y) / 2
-
-    impact = abs(mom1 - mom2) + (t1_speed + t2_speed) * 50
-
-    if mom1 > mom2:
-        spin_loss = (mom1 - mom2) * 0.003
-        if not t2.invincible:
-            t2.spin = max(0, t2.spin - spin_loss)
-        if not t1.invincible:
-            t1.spin = max(0, t1.spin - spin_loss * 0.3)
-        knockback = (mom1 - mom2) * 0.002
+    # Extra knockback for the top that lost the clash.
+    knockback = closing * COLLISION_KNOCKBACK * abs(share1 - share2)
+    if share1 >= share2:
         if t1.special_active and t1.type == TopType.ATTACK:
             knockback *= 2.5
         t2.vx += nx * knockback
         t2.vy += ny * knockback
     else:
-        spin_loss = (mom2 - mom1) * 0.003
-        if not t1.invincible:
-            t1.spin = max(0, t1.spin - spin_loss)
-        if not t2.invincible:
-            t2.spin = max(0, t2.spin - spin_loss * 0.3)
-        knockback = (mom2 - mom1) * 0.002
         if t2.special_active and t2.type == TopType.ATTACK:
             knockback *= 2.5
         t1.vx -= nx * knockback
         t1.vy -= ny * knockback
 
+    # Mark both tops as "just hit" so a hard hit can carry them over the rim.
+    if closing > 200:
+        t1.hit_timer = HIT_WINDOW
+        t2.hit_timer = HIT_WINDOW
+
+    impact = closing * (m1 + m2)
     t1.special_meter = min(100, t1.special_meter + impact * 0.002)
     t2.special_meter = min(100, t2.special_meter + impact * 0.002)
 
-    spark_count = int(min(25, 8 + impact / 200))
-    mix_color = (
-        (t1.color[0] + t2.color[0]) // 2,
-        (t1.color[1] + t2.color[1]) // 2,
-        (t1.color[2] + t2.color[2]) // 2,
-    )
-    particles.emit_sparks(collide_x, collide_y, -nx, -ny, spark_count, (255, 220, 100))
+    collide_x = (t1.x + t2.x) / 2
+    collide_y = (t1.y + t2.y) / 2
+    spark_count = int(min(28, 8 + closing / 50))
+    particles.emit_sparks(collide_x, collide_y, -nx, -ny, spark_count // 2, (255, 220, 100))
+    particles.emit_sparks(collide_x, collide_y, nx, ny, spark_count - spark_count // 2, (255, 220, 100))
 
-    shake_amount = min(15, impact / 80)
-    return shake_amount
+    return min(14.0, 2.0 + closing / 90.0)
 
 
 def check_obstacle_collision(top, obstacles):
@@ -211,7 +248,7 @@ def check_obstacle_collision(top, obstacles):
                 top.vy -= 2 * dot * ny
                 top.vx *= 0.6
                 top.vy *= 0.6
-                top.spin = max(0, top.spin - top.max_spin * 0.04)
+                top.spin = max(0, top.spin - top.max_spin * WALL_SPIN_COST)
                 total_shake += 5
     return total_shake
 

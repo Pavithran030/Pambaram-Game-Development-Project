@@ -4,6 +4,8 @@ working unchanged from the project root."""
 import os
 import sys
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from pambaram.main import main

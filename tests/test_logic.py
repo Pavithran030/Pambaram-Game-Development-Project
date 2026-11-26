@@ -1,5 +1,7 @@
 import sys
 import os
+os.environ["PAMBARAM_NO_SAVE"] = "1"  # never touch the player's real save data
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 print("=" * 60)
