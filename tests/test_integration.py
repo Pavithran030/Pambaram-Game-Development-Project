@@ -1,5 +1,7 @@
 import sys
 import os
+os.environ["PAMBARAM_NO_SAVE"] = "1"  # never touch the player's real save data
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import math
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
@@ -131,6 +133,10 @@ game2 = Game()
 game.match_time = 0
 game.p1.is_launched = True
 game.p2.is_launched = True
+# The 10s simulation above may have ended in a real ring-out; this case is
+# about a time-up with both tops still in the arena.
+game.p1.is_knocked_out = False
+game.p2.is_knocked_out = False
 game.p1.spin = 1000
 game.p1.max_spin = 2000
 game.p2.spin = 1000

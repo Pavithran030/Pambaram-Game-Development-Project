@@ -1,5 +1,7 @@
+import io
 import math
 import random
+import struct
 from array import array
 
 import pygame
@@ -52,14 +54,40 @@ class SoundManager:
                 buf.append(sample)
         return buf
 
+    def _sound_from_pcm_wav(self, pcm_bytes):
+        byte_rate = self._rate * self._channels * 2
+        block_align = self._channels * 2
+        header = struct.pack(
+            "<4sI4s4sIHHIIHH4sI",
+            b"RIFF",
+            36 + len(pcm_bytes),
+            b"WAVE",
+            b"fmt ",
+            16,
+            1,
+            self._channels,
+            self._rate,
+            byte_rate,
+            block_align,
+            16,
+            b"data",
+            len(pcm_bytes),
+        )
+        bio = io.BytesIO(header + pcm_bytes)
+        return pygame.mixer.Sound(file=bio)
+
     def _make(self, name, segments):
         buf = array("h")
         for seg in segments:
             buf.extend(seg)
+        raw = buf.tobytes()
         try:
-            self._cache[name] = pygame.mixer.Sound(buffer=buf.tobytes())
+            self._cache[name] = pygame.mixer.Sound(buffer=raw)
         except Exception:
-            pass
+            try:
+                self._cache[name] = self._sound_from_pcm_wav(raw)
+            except Exception:
+                pass
 
     def _build_all(self):
         self._make("click", [self._tone(720, 0.05, 0.35, "square", decay=10)])

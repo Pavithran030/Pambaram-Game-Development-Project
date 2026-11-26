@@ -1,4 +1,5 @@
 import pygame
+import pygame.font
 from enum import Enum
 
 SCREEN_WIDTH = 1200
@@ -8,9 +9,45 @@ ARENA_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
 ARENA_RADIUS = 280
 RINGOUT_RADIUS = 320
 MATCH_TIME = 180
-TOP_LIFETIME = 120.0  # length of a live battle; the clock only runs once BOTH tops
-                     # are launched (see Game.battle_live), then each top winds down
-                     # to a stop as it expires, guaranteeing a clean finish.
+TOP_LIFETIME = 180.0  # matches MATCH_TIME fallback
+
+# --- Match start / launch -------------------------------------------------
+# Both players aim during the countdown and every top launches at the same
+# instant on "FIGHT!", so neither side gets a head start.
+COUNTDOWN_STEP = 1.2        # seconds per countdown number (3, 2, 1)
+LAUNCH_FORCE = 700.0        # launch speed (px/s) for a perfect launch
+AIM_TURN_SPEED = 2.6        # keyboard aim rotation (rad/s)
+FIGHT_BANNER_TIME = 0.9     # how long "FIGHT!" stays on screen after launch
+
+# Launch power meter: swings 0 -> 1 -> 0 during the countdown. Locking it near
+# the top of the swing is a perfect launch.
+LAUNCH_METER_PERIOD = 1.1   # seconds for one full swing (0 -> 1 -> 0)
+LAUNCH_UNLOCKED_QUALITY = 0.35  # quality if a player never locks the meter
+LAUNCH_MIN_SPIN = 0.5       # starting stamina (fraction of max spin) at quality 0
+LAUNCH_WEAK_DECAY = 0.6     # a quality-0 launch drains stamina 60% faster
+LAUNCH_GRADES = [           # (min quality, label)
+    (0.92, "PERFECT!"),
+    (0.75, "GREAT"),
+    (0.50, "GOOD"),
+    (0.00, "WEAK"),
+]
+
+# --- Movement ---------------------------------------------------------------
+STEER_ACCEL = 750.0         # px/s^2 steering push at full spin (scaled by grip)
+BOWL_ACCEL = 170.0          # pull toward the centre at the rim (stadium slope)
+PRECESSION_RATE = 0.5       # rad/s of path curving while spinning
+FLOOR_FRICTION = 0.16       # per-second speed loss while spinning fast
+
+# --- Combat / ring-out ----------------------------------------------------
+KO_CONFIRM_TIME = 0.8       # seconds a top must stay out before the KO counts
+HIT_WINDOW = 0.6            # a top counts as "just hit" for this long
+RINGOUT_ESCAPE_SPEED = 700  # outward speed at the wall that carries a hit top over the edge
+COLLISION_RESTITUTION = 0.8
+MIN_IMPACT_SPEED = 90       # closing speed below this is a soft push, not a hit
+WALL_SPIN_COST = 0.015       # fraction of max spin lost per wall or pillar bounce
+COLLISION_SPIN_DAMAGE = 0.03  # spin lost per px/s of closing speed (before mass/spin weighting)
+COLLISION_KNOCKBACK = 0.12    # extra push given to the weaker top
+ATTACKER_BONUS = 1.5         # clash power bonus for the top ramming into the contact
 
 class GameState(Enum):
     MENU = 1
@@ -61,25 +98,6 @@ COLORS = {
     "button_hover": (44, 49, 66),
     "button_active": (58, 65, 86),
     "shadow": (0, 0, 0, 120),
-
-    # --- Light / clean UI theme (menus, selection screens, HUD) ---
-    # Gameplay drawing (arena, tops) keeps its own warm palette; only the UI
-    # chrome uses these. p1_color/p2_color above are shared with the tops.
-    "bg_light": (236, 239, 244),      # main screen background (off-white)
-    "bg_light_alt": (224, 229, 237),  # faint banding behind the menu
-    "panel_white": (255, 255, 255),   # cards / panels
-    "panel_alt": (244, 246, 250),     # secondary panel fill
-    "panel_scrim": (250, 251, 253, 244),  # HUD panel fill (near-opaque white)
-    "text_dark": (24, 27, 34),        # primary text
-    "text_muted": (92, 100, 114),     # secondary text
-    "text_faint": (140, 148, 162),    # tertiary / hints
-    "border_soft": (198, 204, 214),   # crisp idle borders
-    "border_strong": (120, 128, 140), # dividers / stronger borders
-    "gold_dark": (188, 132, 16),      # gold that stays legible on white
-    "btn_idle": (255, 255, 255),
-    "btn_hover": (232, 238, 248),
-    "btn_active": (214, 224, 240),
-    "track_light": (222, 226, 233),   # empty meter track on a white panel
 }
 
 TOP_PRESETS = {
@@ -212,18 +230,52 @@ ARENA_PRESETS = {
     },
 }
 
+TYPE_COLORS = {
+    TopType.ATTACK: (230, 70, 82),
+    TopType.DEFENSE: (66, 148, 245),
+    TopType.BALANCE: (72, 201, 130),
+    TopType.SPEED: (162, 109, 235),
+}
+
+# --- Typography -------------------------------------------------------------
+# "display" is for titles, buttons, names and numbers; "body" for running
+# text; "semibold" for small labels that must stay readable. Each family
+# falls back to Arial and then pygame's built-in font on other systems.
+FONT_FAMILIES = {
+    "display": ("bahnschrift", "segoeuisemibold", "dejavusans", "liberationsans", "arial"),
+    "body": ("segoeui", "calibri", "dejavusans", "liberationsans", "arial"),
+    "semibold": ("segoeuisemibold", "segoeui", "dejavusans", "liberationsans", "arial"),
+}
+
 pygame.font.init()
-_font_cache = {}
-def get_font(size, bold=False):
-    key = (size, bold)
-    if key in _font_cache:
-        return _font_cache[key]
-    try:
-        if bold:
-            font = pygame.font.SysFont("arial, georgia, sans-serif", size, bold=True)
-        else:
-            font = pygame.font.SysFont("arial, georgia, sans-serif", size)
-    except Exception:
-        font = pygame.font.Font(None, size)
-    _font_cache[key] = font
+_FONT_PATHS = {}
+_FONT_CACHE = {}
+
+
+def _resolve_font_path(family):
+    if family not in _FONT_PATHS:
+        path = None
+        for name in FONT_FAMILIES.get(family, FONT_FAMILIES["body"]):
+            path = pygame.font.match_font(name)
+            if path:
+                break
+        _FONT_PATHS[family] = path
+    return _FONT_PATHS[family]
+
+
+def get_font(size, bold=False, family=None):
+    """Cached font lookup. Creating a SysFont is slow, and the UI asks for
+    dozens of fonts every frame, so each (family, size, bold) is built once."""
+    family = family or ("display" if bold else "body")
+    key = (family, size, bold)
+    font = _FONT_CACHE.get(key)
+    if font is None:
+        path = _resolve_font_path(family)
+        try:
+            font = pygame.font.Font(path, size)
+        except Exception:
+            font = pygame.font.Font(None, size)
+        if bold and family == "display":
+            font.set_bold(True)
+        _FONT_CACHE[key] = font
     return font

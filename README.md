@@ -20,6 +20,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Method 3: Play or Deploy Online (Free)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete step-by-step instructions to run and deploy the game online for free via **GitHub Pages** (Pygbag WebAssembly), **itch.io**, **Cloudflare Pages**, or **Hugging Face Spaces**.
+
 ---
 
 ## System Requirements
@@ -48,27 +51,75 @@ If the 3-minute timer runs out, whoever has the most spin wins.
 
 ### Controls
 
+#### Match start
+Every match opens with a **3-2-1 countdown**. During it each player:
+1. **Aims** — an arrow shows where the top will fly.
+2. **Times the launch** — a power meter swings up and down beside your top. Lock it
+   as close to the top (the gold **PERFECT** zone) as you can.
+
+On **FIGHT!** both tops launch at the same moment. Launch perfection decides your
+**stamina**: a PERFECT launch starts at 100% spin and drains slowly; a WEAK one starts
+around 60% and drains faster. Never locking the meter gives a weak launch.
+
+After launch the stadium behaves like a real bowl: tops keep rolling, curve as they
+spin, and drift back toward the centre until their stamina runs out.
+
 #### Player 1 (Blue)
 | Action               | Input                          |
 |----------------------|--------------------------------|
-| Launch Top           | **Left Click + Drag** on your top, then release |
+| Aim launch (countdown) | **A / D**, or **Left Click + Drag** (pull back like a slingshot) |
+| Lock launch power    | **SPACE**, or release the left-drag |
 | Steer / Move       | **W A S D**                    |
-| Dash (speed burst)  | **Left SHIFT + Direction**     |
-| Special Ability    | **SPACE** (when meter full)     |
+| Dash (speed burst)  | **Left SHIFT + Direction** (costs 8% spin) |
+
+**Playing vs AI:** Player 1 can also use the **arrow keys** to move/aim,
+**Right SHIFT** to dash and **ENTER** to lock power.
 
 #### Player 2 (Red) — only in VS PLAYER mode
 | Action               | Input                          |
 |----------------------|--------------------------------|
-| Launch Top           | **Right Click + Drag** on P2 top |
+| Aim launch (countdown) | **← / →**, or **Right Click + Drag** |
+| Lock launch power    | **ENTER** (or Right CTRL), or release the right-drag |
 | Steer / Move       | **Arrow Keys ← ↑ ↓ →**     |
-| Dash (speed burst)  | **Right SHIFT + Direction**    |
-| Special Ability    | **ENTER** (when meter full)     |
+| Dash (speed burst)  | **Right SHIFT + Direction** (costs 8% spin) |
 
 #### Global
 | Action               | Input                          |
 |----------------------|--------------------------------|
-| Pause / Resume        | **ESC**                        |
-| Force AI Launch (debug)| **Middle Mouse Button**         |
+| Pause / Resume        | **ESC** (the game also pauses itself if you alt-tab or minimise) |
+| Fullscreen            | **F11**                        |
+| Mute / unmute sound   | **M**                          |
+
+#### Menus (keyboard)
+| Screen        | Keys |
+|---------------|------|
+| Choose Top    | **ENTER** next · **ESC** back |
+| Choose Arena  | **← / →** pick arena · **ENTER** start · **ESC** back |
+| Game Over     | **ENTER** / **R** rematch · **ESC** main menu |
+
+#### Telling the tops apart
+Each top sits on a coloured floor ring — **blue = Player 1**, **red = Player 2 / AI** —
+and every top type has its own silhouette: Attack tops have hooked blades,
+Defense tops a heavy studded rim, Balance tops six even lobes, Speed tops thin
+swept fins.
+
+#### Saved data
+Your last tops, arena, mode, AI difficulty, sound and fullscreen choices are
+remembered between sessions, along with lifetime stats (matches, wins, best
+score — shown on the main menu). Files live in `%APPDATA%\Pambaram\`
+(`~/.pambaram/` on macOS/Linux):
+- `settings.json` — settings and stats. Delete it to reset everything; a damaged
+  file is ignored automatically.
+- `crash.log` — if the game ever hits an unexpected error, it shows a message
+  and writes the details here.
+
+#### How to win
+- **Ring out** — smash the opponent hard enough that they fly over the rim. A top
+  that drives *itself* into the wall just bounces; only a strong hit carries it out.
+- **Spin out** — drain the opponent's spin to 0. Hits drain the weaker top more
+  (the top ramming into the other, heavier tops and faster-spinning tops win clashes; Attack types hit harder, Defense
+  types take less). Wall/pillar bounces and dashes also cost spin.
+- **Time up** — after 3:00, the top with the higher spin % wins.
 
 ---
 
@@ -125,12 +176,17 @@ sample1/
 │   ├── ai.py                    # AI Controller: state machine & difficulty levels
 │   ├── particles.py         # Particle effects: dust, sparks, trails, ring-out
 │   ├── ui.py                    # UI Components: buttons, bars, menus, HUD, screens
+│   ├── top_art.py              # Procedural top artwork (per-type silhouettes, window icon)
+│   ├── settings.py             # Saved settings/stats and crash logging
 │   └── sound.py                # Procedurally synthesized SFX (no audio assets needed)
 │
-├── tests/                        # Logic / UI / integration smoke tests
+├── tests/                        # Automated tests (see "Running Tests")
 │   ├── test_logic.py
 │   ├── test_ui.py
-│   └── test_integration.py
+│   ├── test_integration.py
+│   ├── test_match_flow.py      # launch, collisions, ring-out, win rules, controls
+│   ├── test_production.py      # save data, crash log, window/menu behaviour, artwork
+│   └── test_fuzz.py            # 25,000 frames of random input across every screen
 │
 └── docs/                         # Design docs & reference screenshots
     ├── Pambaram_Game_Development_Plan.md
@@ -159,10 +215,10 @@ sample1/
 - Ring-out zone detection
 
 ✅ Gameplay
-- Drag & flick launch system with power meter
+- Simultaneous launch: both players aim during the countdown, launch together on FIGHT!
 - WASD/Arrow steering with spin-dependent resistance
 - Dash moves consuming spin energy
-- 4 unique special abilities per top type
+- Collision clashes decided by mass, spin and top type; hard hits can ring out
 - 3 AI difficulty levels (Easy / Medium / Hard)
 - AI state machine: Idle → Approach → Attack → Retreat → Defend → Special
 
@@ -172,11 +228,11 @@ sample1/
 - Sparks & dust particles
 - Wobble animation as spin dies
 - Special move glow effects
-- 3-2-1 countdown
+- 3-2-1 countdown with aim arrows
 
 ✅ UI / UX
 - Main Menu, Top Selection, Arena Selection
-- Live HUD: spin bars, special meters, timer
+- Live HUD: spin bars, dash cooldown, timer
 - Pause menu, Victory/Defeat screen with stats
 
 ---
@@ -210,12 +266,16 @@ Then read the error message.
 
 ## Running Tests
 
-Smoke tests for physics/logic, UI rendering, and full game-manager integration:
 ```bash
-python tests/test_logic.py
-python tests/test_ui.py
-python tests/test_integration.py
+python tests/test_logic.py         # physics / logic
+python tests/test_ui.py            # every screen renders
+python tests/test_integration.py   # full game-manager flow
+python tests/test_match_flow.py    # launch, collisions, ring-out, win rules, controls
+python tests/test_production.py    # save data, crash log, window & menu behaviour
+python tests/test_fuzz.py          # random-input stress test (takes a few minutes)
 ```
+Each script exits with an error if anything fails. Tests never touch your real
+save data.
 
 ---
 
