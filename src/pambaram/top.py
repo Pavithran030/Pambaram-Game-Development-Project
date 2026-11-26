@@ -132,7 +132,9 @@ class Top:
         decay_mod = self.decay_mult
         if self.is_dashing:
             decay_mod *= 2.5
-        self.spin -= self.spin_decay * decay_mod * dt
+        # Floor grip scales spin decay (design doc 4.1): slick floors such as
+        # the River Bed sap less spin than grippy ones.
+        self.spin -= self.spin_decay * decay_mod * arena_grip_mod * dt
         if self.spin <= 0:
             self.spin = 0
             self.is_spinning = False
